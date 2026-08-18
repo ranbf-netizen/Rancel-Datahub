@@ -34,7 +34,7 @@ export default function AdminBundlesPage() {
         setSyncMsg((data && data.error) || `Sync failed (status ${res.status}). It may have timed out - try again.`);
         return;
       }
-      setSyncMsg("Catalog synced from mydatagigs.com.");
+      setSyncMsg("Catalog synced from supplier.");
       load();
     } catch (err: any) {
       setSyncMsg(err.message || "Sync failed - couldn't reach the server.");
