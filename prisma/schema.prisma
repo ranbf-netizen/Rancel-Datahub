@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum FulfillmentStatus {
+  NOT_STARTED
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
+enum PinStatus {
+  AVAILABLE
+  SOLD
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  phone        String   @unique
+  passwordHash String
+  role         Role     @default(CUSTOMER)
+  createdAt    DateTime @default(now())
+
+  dataOrders DataOrder[]
+  pinOrders  PinOrder[]
+}
+
+// Cached copy of the supplier's package catalog, with our own selling price layered on top.
+model DataBundle {
+  id                String   @id @default(uuid())
+  network           String // mtn | telecel | at_bigdata | at_ishare
+  label              String // e.g. "10" (GB)
+  dataSizeGb        Float
+  supplierPackageId  String // package_id from supplier
+  costPrice          Float // supplier's price
+  sellingPrice       Float // what the customer pays (admin sets this)
+  active             Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+
+  orders DataOrder[]
+
+  @@unique([network, supplierPackageId])
+}
+
+model DataOrder {
+  id                String            @id @default(uuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id])
+  bundleId          String
+  bundle            DataBundle        @relation(fields: [bundleId], references: [id])
+  beneficiaryNumber String
+  amount            Float // amount the CUSTOMER paid us
+  paystackReference String?           @unique
+  paymentStatus     PaymentStatus     @default(PENDING)
+  fulfillmentStatus FulfillmentStatus @default(NOT_STARTED)
+  supplierOrderId   String? // order_id returned by mydatagigs
+  failureReason     String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model PinBatch {
+  id         String   @id @default(uuid())
+  examType   String // WAEC | BECE | NOVDCE
+  year       Int
+  costPrice  Float // what WE paid per pin in this batch
+  sellingPrice Float // what customer pays for a pin from this batch
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  pins Pin[]
+}
+
+model Pin {
+  id           String    @id @default(uuid())
+  batchId      String
+  batch        PinBatch  @relation(fields: [batchId], references: [id])
+  serialNumber String
+  pinCode      String
+  status       PinStatus @default(AVAILABLE)
+  soldToUserId String?
+  soldAt       DateTime?
+
+  pinOrder PinOrder?
+
+  @@unique([batchId, serialNumber])
+}
+
+model PinOrder {
+  id                String        @id @default(uuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id])
+  pinId             String?       @unique
+  pin               Pin?          @relation(fields: [pinId], references: [id])
+  examType          String
+  year              Int
+  amount            Float
+  paystackReference String?       @unique
+  paymentStatus     PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model Refund {
+  id           String   @id @default(uuid())
+  orderType    String // "data" | "pin"
+  orderId      String
+  reason       String
+  status       String   @default("pending") // pending | processed | rejected
+  createdAt    DateTime @default(now())
+}
