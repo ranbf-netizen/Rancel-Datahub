@@ -2,8 +2,11 @@
 
 export default function LogoutButton() {
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "GET", cache: "no-store" });
-    window.location.href = "/"; // full reload so the server-rendered header re-checks the session
+    try {
+      await fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
+    } finally {
+      window.location.replace("/");
+    }
   }
 
   return (

@@ -7,6 +7,9 @@ import MobileNav from "./components/MobileNav";
 import WhatsAppButton from "./components/WhatsAppButton";
 import Footer from "./components/Footer";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "Rancel DataHub",
   description: "Buy data bundles and results checker PINs in seconds.",
