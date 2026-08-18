@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import UnsupportedSimNotice from "../components/UnsupportedSimNotice";
+import VerifyNumberWidget from "../components/VerifyNumberWidget";
 
 type Bundle = {
   id: string;
@@ -58,6 +59,7 @@ export default function DataPage() {
   const [beneficiary, setBeneficiary] = useState(searchParams.get("phone") || "");
   const [status, setStatus] = useState<string | null>(null);
   const [buying, setBuying] = useState(false);
+  const [numberCheck, setNumberCheck] = useState<{ status: string; hoursRemaining?: number } | null>(null);
 
   useEffect(() => {
     fetch("/api/bundles")
@@ -73,6 +75,22 @@ export default function DataPage() {
     const match = bundles.find((b) => b.id === preselectId);
     if (match) setSelected(match);
   }, [bundles, searchParams]);
+
+  // Warn (not block) if the recipient number isn't verified yet - only matters for
+  // bundles bigger than 1GB, since a 1GB purchase IS the activation step itself.
+  useEffect(() => {
+    if (!selected || selected.dataSizeGb <= 1 || !isValidGhanaNumber(beneficiary)) {
+      setNumberCheck(null);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      fetch(`/api/verify-number?phone=${encodeURIComponent(beneficiary)}`)
+        .then((r) => r.json())
+        .then((d) => setNumberCheck(d.status ? d : null))
+        .catch(() => setNumberCheck(null));
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [beneficiary, selected]);
 
   const networksPresent = Array.from(new Set(bundles.map((b) => b.network)));
 
@@ -138,6 +156,10 @@ export default function DataPage() {
         Real prices, no hidden fees, delivered straight to the number you enter — pay per order,
         no wallet needed.
       </p>
+
+      <div className="mt-6 max-w-md">
+        <VerifyNumberWidget />
+      </div>
 
       {/* Network tabs */}
       <div className="mt-8 flex flex-wrap gap-2">
@@ -236,6 +258,18 @@ export default function DataPage() {
               required
               autoFocus
             />
+            {numberCheck?.status === "new" && (
+              <p className="mt-2 rounded-lg border border-ghRed/25 bg-ghRed/5 p-2.5 text-xs text-ink/70">
+                This number hasn't received a delivery from us before. New numbers need a 1GB
+                bundle first to activate — larger bundles may not deliver until that's done.
+              </p>
+            )}
+            {numberCheck?.status === "activating" && (
+              <p className="mt-2 rounded-lg border border-mtn/40 bg-mtn/10 p-2.5 text-xs text-ink/70">
+                This number is still being verified (~{numberCheck.hoursRemaining}h left) — it may
+                not deliver instantly yet.
+              </p>
+            )}
             {status && <p className="mt-3 text-sm text-ghRed">{status}</p>}
             <button className="btn-primary mt-4 w-full" disabled={buying}>
               {buying ? "Starting checkout…" : "Continue to Payment"}
