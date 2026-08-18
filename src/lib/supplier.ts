@@ -126,6 +126,37 @@ export async function getWalletBalance(): Promise<number> {
   return data.deposit.balance as number;
 }
 
+export type SupplierOrderHistoryItem = {
+  reference: string;
+  status: string; // "pending" | "completed" | "failed" | "refunded"
+  placedAt?: string;
+  completedAt?: string;
+};
+
+// Real order history for a phone number, straight from DataMart - GET /customers/:phone.
+// Used to check whether a number has genuinely had a completed delivery before, which
+// survives our own database being reset (e.g. a provider migration) since it's DataMart's
+// own record, not ours. Returns [] if DataMart has no record of this number at all.
+export async function getCustomerHistory(phone: string): Promise<SupplierOrderHistoryItem[]> {
+  try {
+    const data = await supplierFetch(`/customers/${phone}`);
+    const orders: any[] = Array.isArray(data?.orders) ? data.orders : Array.isArray(data) ? data : [];
+    return orders.map((o) => ({
+      reference: o.reference,
+      status: o.status,
+      placedAt: o.placedAt,
+      completedAt: o.completedAt,
+    }));
+  } catch (err: any) {
+    // DataMart returns a 404-style error when the customer has never ordered before -
+    // that's a normal "new number" case, not a real failure, so treat it as empty history.
+    if (String(err.message).includes("404") || String(err.message).toLowerCase().includes("not found")) {
+      return [];
+    }
+    throw err;
+  }
+}
+
 // Admin dashboard uses this to warn when the DataMart deposit balance is running
 // low, since a low balance there means paid customer orders will start failing.
 export const LOW_BALANCE_THRESHOLD = 50; // GHS - adjust as needed
