@@ -111,10 +111,10 @@ export async function placeOrder(params: {
 }
 
 export async function getOrderStatus(reference: string) {
-  const data = await supplierFetch(`/orders/${reference}`);
+  const data = await supplierFetch(`/order-status/${reference}`);
   return {
     orderId: data.reference as string,
-    orderStatus: data.status as string, // "pending" | "completed" | "failed" | "refunded"
+    orderStatus: data.orderStatus as string,
     amount: data.price as number,
   };
 }
