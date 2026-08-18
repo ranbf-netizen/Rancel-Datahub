@@ -1,28 +1,51 @@
-# mydatagigs.com API (data bundle supplier)
+# DataMart Agent Store API (data bundle supplier)
 
-Get an API key at: https://mydatagigs.com/my-account/api-access/
-
-**Important:** mydatagigs.com requires *their* wallet (yours, on their platform) to be funded
-before any order can be placed. This is separate from customer payments, which flow through
-Paystack into your bank account. See admin dashboard → Overview for a live balance check.
+Base URL: `https://api.datamartgh.shop/api/store/v1`
+Get an API key from DataMart's Developer API settings page.
 
 ## Auth
-`Authorization: Bearer YOUR_API_KEY`
+`Authorization: Bearer ask_YOUR_KEY` (or `x-api-key` header if Bearer isn't usable)
 
 ## Networks
-`mtn`, `telecel`, `at_bigdata`, `at_ishare`
+`YELLO` (MTN), `TELECEL` (Telecel), `AT_PREMIUM` (AirtelTigo) - mapped internally to our
+short keys `mtn`, `telecel`, `airteltigo` in `src/lib/supplier.ts`.
+
+## Important: orders are asynchronous
+`POST /orders` only confirms the order was **accepted** (status: "pending"). Actual delivery
+completion arrives ~30 seconds later via webhook (`order.completed` / `order.failed`), NOT
+in the initial response. Our code accounts for this - see `fulfillDataOrder()` in
+`src/lib/fulfillment.ts`, which leaves an order at `PROCESSING` until either:
+1. The webhook resolves it (`/api/webhooks/datamart/route.ts`), or
+2. The fallback sweep (`/api/cron/sweep-pending`) actively polls `GET /orders/:reference`
+   if it's been stuck too long - because **DataMart does not retry failed webhook
+   deliveries**, so any downtime on our end could otherwise lose that confirmation forever.
 
 ## Endpoints
 
-**Place order** — `POST /wp-json/custom/v1/place-order`
+**Place order** — `POST /orders` (requires `X-Idempotency-Key: <uuid>` header)
 ```json
-{ "network": "mtn", "beneficiary": "0241234567", "pa_data-bundle-packages": 2 }
+{ "phoneNumber": "0241234567", "network": "YELLO", "capacity": 5 }
 ```
 
-**Wallet balance** — `GET /wp-json/custom/v1/wallet-balance`
+**Order status** — `GET /orders/:reference`
 
-**Order status** — `GET /wp-json/custom/v1/order-status?order_id=1685487`
+**Product catalog + pricing** — `GET /products` (exact response shape not fully documented -
+our parsing in `getPackages()` is a best-effort guess, double check after first sync)
 
-**Packages (catalog + cost prices)** — `GET /wp-json/custom/v1/packages?network=mtn`
+**Wallet balance** — `GET /wallet/balance` → use `data.deposit.balance` (what orders spend from;
+`data.earnings` is separate storefront revenue, not spendable via this API)
+
+**Customers** — `GET /customers`, `GET /customers/:phone`
+
+## Webhooks
+Configure per-key in DataMart's Developer API settings:
+`https://yourdomain.com/api/webhooks/datamart`
+
+Events: `order.created`, `order.completed`, `order.failed`, `order.refunded`,
+`withdrawal.completed`, `withdrawal.refunded`. Signed with HMAC-SHA256 in the
+`X-Webhook-Signature` header, verified against `DATAMART_WEBHOOK_SECRET`.
+
+They expect a response within 8 seconds and do **not retry** failed deliveries -
+our webhook handler is deliberately minimal to stay fast.
 
 See `src/lib/supplier.ts` for the typed wrapper used throughout the app.

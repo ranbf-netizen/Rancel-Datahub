@@ -42,6 +42,7 @@ model User {
 
   dataOrders DataOrder[]
   pinOrders  PinOrder[]
+  agentProfile AgentProfile?
 }
 
 // Cached copy of the supplier's package catalog, with our own selling price layered on top.
@@ -53,21 +54,22 @@ model DataBundle {
   supplierPackageId  String // package_id from supplier
   costPrice          Float // supplier's price
   sellingPrice       Float // what the customer pays (admin sets this)
+  validityDays       Int      @default(30) // admin-editable; supplier API doesn't return this
   active             Boolean  @default(true)
   updatedAt          DateTime @updatedAt
 
   orders DataOrder[]
-
-  @@unique([network, supplierPackageId])
+  agentSales AgentSale[]
 }
 
 model DataOrder {
   id                String            @id @default(uuid())
-  userId            String
-  user              User              @relation(fields: [userId], references: [id])
+  userId            String?
+  user              User?             @relation(fields: [userId], references: [id])
+  guestEmail        String? // set for guest checkouts (synthetic if not provided) - required by Paystack
   bundleId          String
   bundle            DataBundle        @relation(fields: [bundleId], references: [id])
-  beneficiaryNumber String
+  beneficiaryNumber String // recipient number - also used as the lookup phone for guest tracking
   amount            Float // amount the CUSTOMER paid us
   paystackReference String?           @unique
   paymentStatus     PaymentStatus     @default(PENDING)
@@ -107,8 +109,10 @@ model Pin {
 
 model PinOrder {
   id                String        @id @default(uuid())
-  userId            String
-  user              User          @relation(fields: [userId], references: [id])
+  userId            String?
+  user              User?         @relation(fields: [userId], references: [id])
+  guestPhone        String? // required for guest checkout - used for public tracking lookup
+  guestEmail        String? // synthetic if not provided - required by Paystack
   pinId             String?       @unique
   pin               Pin?          @relation(fields: [pinId], references: [id])
   examType          String
@@ -127,4 +131,68 @@ model Refund {
   reason       String
   status       String   @default("pending") // pending | processed | rejected
   createdAt    DateTime @default(now())
+}
+
+enum AgentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum AgentTransactionType {
+  TOPUP
+  SALE
+  WITHDRAWAL
+}
+
+enum AgentTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+// An agent buys bundles into their own wallet at a discounted reseller price,
+// then resells to their own customers (collected outside the platform - cash,
+// momo transfer directly to the agent) at whatever price they choose. Profit
+// is tracked here for their own records.
+model AgentProfile {
+  id              String      @id @default(uuid())
+  userId          String      @unique
+  user            User        @relation(fields: [userId], references: [id])
+  status          AgentStatus @default(PENDING)
+  walletBalance   Float       @default(0)
+  discountPercent Float       @default(10) // % off the normal selling price for reseller cost
+  createdAt       DateTime    @default(now())
+
+  transactions AgentTransaction[]
+  sales        AgentSale[]
+}
+
+model AgentTransaction {
+  id                String                  @id @default(uuid())
+  agentId           String
+  agent             AgentProfile            @relation(fields: [agentId], references: [id])
+  type              AgentTransactionType
+  amount            Float
+  description       String?
+  paystackReference String?                 @unique // set for TOPUP
+  status            AgentTransactionStatus  @default(COMPLETED)
+  createdAt         DateTime                @default(now())
+}
+
+model AgentSale {
+  id                String   @id @default(uuid())
+  agentId           String
+  agent             AgentProfile @relation(fields: [agentId], references: [id])
+  bundleId          String
+  bundle            DataBundle @relation(fields: [bundleId], references: [id])
+  beneficiaryNumber String
+  resellerCost      Float // what it cost the agent (discounted)
+  customerPrice     Float // what the agent charged their own customer
+  profit            Float
+  supplierOrderId   String?
+  status            FulfillmentStatus @default(NOT_STARTED)
+  failureReason     String?
+  createdAt         DateTime @default(now())
 }

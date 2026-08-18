@@ -29,11 +29,14 @@ export default function MobileNav({ session }: { session: Session }) {
       {open && (
         <div className="absolute left-0 right-0 top-16 z-40 border-b border-ink/10 bg-paper px-5 py-4 shadow-md">
           <nav className="flex flex-col gap-4 text-sm font-medium">
-            <Link href="/data" onClick={() => setOpen(false)}>Data Bundles</Link>
+            <Link href="/data" onClick={() => setOpen(false)}>Buy Data</Link>
+            <Link href="/track" onClick={() => setOpen(false)}>Track Order</Link>
+            <Link href="/agents" onClick={() => setOpen(false)}>Become an Agent</Link>
             <Link href="/results" onClick={() => setOpen(false)}>Results Checker</Link>
             {session ? (
               <>
                 <Link href="/orders" onClick={() => setOpen(false)}>My Orders</Link>
+                <Link href="/agent" onClick={() => setOpen(false)}>Agent Dashboard</Link>
                 {session.role === "ADMIN" && (
                   <Link href="/admin" onClick={() => setOpen(false)}>Admin</Link>
                 )}

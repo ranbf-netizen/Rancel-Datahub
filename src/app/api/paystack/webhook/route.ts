@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { fulfillDataOrder, fulfillPinOrder } from "@/lib/fulfillment";
+import { fulfillDataOrder, fulfillPinOrder, fulfillAgentTopup } from "@/lib/fulfillment";
 
 // Paystack calls this URL after every transaction event. Configure it in the
 // Paystack dashboard as: https://yourdomain.com/api/paystack/webhook
@@ -29,6 +29,8 @@ export async function POST(req: NextRequest) {
     await fulfillDataOrder(reference);
   } else if (orderType === "pin") {
     await fulfillPinOrder(reference);
+  } else if (orderType === "agent_topup") {
+    await fulfillAgentTopup(reference);
   }
 
   return NextResponse.json({ received: true });

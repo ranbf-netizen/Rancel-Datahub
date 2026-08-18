@@ -1,3 +1,19 @@
+/**
+ * PIN sourcing: currently manual — admin uploads batches bought in bulk from a
+ * third-party source (see /admin/pins). This is deliberately isolated behind
+ * fulfillDataOrder/fulfillPinOrder in lib/fulfillment.ts.
+ *
+ * ============================================================
+ *  INTEGRATE LIVE WAEC/BECE/WASSCE CHECKER PIN API HERE
+ * ============================================================
+ * When a real checker PIN supplier API is ready:
+ *   1. Add a wrapper here (same pattern as src/lib/supplier.ts for data bundles).
+ *   2. In fulfillPinOrder() (src/lib/fulfillment.ts), replace the "claim one
+ *      AVAILABLE Pin from stock" logic with a live API call to buy a PIN on
+ *      demand, OR keep both paths (batch stock first, live API as fallback).
+ *   3. No other files need to change — routes, checkout, and admin already
+ *      call through fulfillPinOrder() only.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";

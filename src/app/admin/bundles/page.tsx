@@ -9,6 +9,7 @@ type Bundle = {
   dataSizeGb: number;
   costPrice: number;
   sellingPrice: number;
+  validityDays: number;
   active: boolean;
 };
 
@@ -26,31 +27,27 @@ export default function AdminBundlesPage() {
   async function handleSync() {
     setSyncing(true);
     setSyncMsg("");
-    const res = await fetch("/api/admin/bundles", { method: "POST" });
-    const data = await res.json();
-    setSyncing(false);
-    if (!res.ok) {
-      setSyncMsg(data.error || "Sync failed.");
-      return;
+    try {
+      const res = await fetch("/api/admin/bundles", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        setSyncMsg((data && data.error) || `Sync failed (status ${res.status}). It may have timed out - try again.`);
+        return;
+      }
+      setSyncMsg("Catalog synced from mydatagigs.com.");
+      load();
+    } catch (err: any) {
+      setSyncMsg(err.message || "Sync failed - couldn't reach the server.");
+    } finally {
+      setSyncing(false);
     }
-    setSyncMsg("Catalog synced from mydatagigs.com.");
-    load();
   }
 
-  async function updatePrice(id: string, sellingPrice: number) {
+  async function patchBundle(id: string, body: Record<string, unknown>) {
     await fetch("/api/admin/bundles", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, sellingPrice }),
-    });
-    load();
-  }
-
-  async function toggleActive(id: string, active: boolean) {
-    await fetch("/api/admin/bundles", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, active: !active }),
+      body: JSON.stringify({ id, ...body }),
     });
     load();
   }
@@ -63,16 +60,17 @@ export default function AdminBundlesPage() {
           {syncing ? "Syncing…" : "Sync catalog from supplier"}
         </button>
       </div>
-      {syncMsg && <p className="mt-2 text-sm text-moss">{syncMsg}</p>}
+      {syncMsg && <p className="mt-2 text-sm text-primary">{syncMsg}</p>}
 
       <div className="mt-6 overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
+      <table className="w-full min-w-[680px] text-sm">
         <thead>
-          <tr className="border-b border-ink/10 text-left text-xs uppercase text-ink/50">
+          <tr className="border-b border-ink/10 text-left text-xs uppercase text-slate">
             <th className="py-2">Network</th>
             <th>Size</th>
             <th>Cost</th>
             <th>Selling price</th>
+            <th>Validity (days)</th>
             <th>Margin</th>
             <th>Active</th>
           </tr>
@@ -89,12 +87,24 @@ export default function AdminBundlesPage() {
                   step="0.01"
                   defaultValue={b.sellingPrice}
                   className="field !w-24"
-                  onBlur={(e) => updatePrice(b.id, Number(e.target.value))}
+                  onBlur={(e) => patchBundle(b.id, { sellingPrice: Number(e.target.value) })}
                 />
               </td>
-              <td className="text-moss">GH₵ {(b.sellingPrice - b.costPrice).toFixed(2)}</td>
               <td>
-                <input type="checkbox" checked={b.active} onChange={() => toggleActive(b.id, b.active)} />
+                <input
+                  type="number"
+                  defaultValue={b.validityDays}
+                  className="field !w-20"
+                  onBlur={(e) => patchBundle(b.id, { validityDays: Number(e.target.value) })}
+                />
+              </td>
+              <td className="text-primary">GH₵ {(b.sellingPrice - b.costPrice).toFixed(2)}</td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={b.active}
+                  onChange={() => patchBundle(b.id, { active: !b.active })}
+                />
               </td>
             </tr>
           ))}
@@ -102,7 +112,7 @@ export default function AdminBundlesPage() {
       </table>
       </div>
       {bundles.length === 0 && (
-        <p className="mt-6 text-sm text-ink/50">
+        <p className="mt-6 text-sm text-slate">
           No bundles yet — click "Sync catalog from supplier" to pull the current package list and prices.
         </p>
       )}

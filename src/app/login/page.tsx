@@ -1,10 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import PasswordInput from "../components/PasswordInput";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/";
+
   const [emailOrPhone, setEmailOrPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,7 +37,7 @@ export default function LoginPage() {
       setError(data.error || "Something went wrong.");
       return;
     }
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 
@@ -39,7 +51,7 @@ export default function LoginPage() {
         </div>
         <div>
           <label className="label">Password</label>
-          <input className="field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <PasswordInput value={password} onChange={setPassword} required />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>

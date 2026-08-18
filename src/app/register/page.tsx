@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import PasswordInput from "../components/PasswordInput";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function RegisterPage() {
         </div>
         <div>
           <label className="label">Password</label>
-          <input className="field" type="password" value={form.password} onChange={(e) => update("password", e.target.value)} required minLength={6} />
+          <PasswordInput value={form.password} onChange={(v) => update("password", v)} required minLength={6} />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button className="btn-primary w-full" disabled={loading}>

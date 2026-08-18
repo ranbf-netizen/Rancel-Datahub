@@ -1,24 +1,37 @@
 /**
- * Wrapper around the mydatagigs.com data bundle supplier API.
+ * Wrapper around the DataMart Agent Store API (api.datamartgh.shop).
  *
- * Docs summary (see /docs/supplier-api.md for the raw copy the client sent):
+ * Key differences from the previous supplier (mydatagigs.com) that the rest
+ * of the app has been updated to account for:
+ *  - Orders are placed asynchronously: POST /orders returns "pending"
+ *    immediately, then a webhook (order.completed / order.failed) fires
+ *    roughly 30 seconds later with the real outcome. See
+ *    /api/webhooks/datamart/route.ts and fulfillDataOrder() in
+ *    lib/fulfillment.ts, which now leaves an order at PROCESSING until that
+ *    webhook (or the fallback status-check sweep) resolves it.
+ *  - Only 3 networks, not 4: YELLO (MTN), TELECEL, AT_PREMIUM (AirtelTigo).
+ *  - POST /orders requires a unique X-Idempotency-Key per attempt (a UUID) -
+ *    resending the same key returns the original response instead of
+ *    double-charging the wallet.
  *  - Auth: Authorization: Bearer <SUPPLIER_API_KEY>
- *  - GET  /packages?network=mtn            -> catalog + supplier cost prices
- *  - POST /place-order                     -> { network, beneficiary, "pa_data-bundle-packages": <package_id> }
- *  - GET  /order-status?order_id=...       -> delivery status
- *  - GET  /wallet-balance                  -> OUR balance on mydatagigs.com (must stay funded)
- *
- * Important: this wallet is separate from customer payments. Customers pay us via
- * Paystack; we then spend from our own mydatagigs.com wallet to fulfill each order.
  */
 
-const BASE_URL = process.env.SUPPLIER_API_BASE_URL || "https://mydatagigs.com/wp-json/custom/v1";
+import { v4 as uuid } from "uuid";
+
+const BASE_URL = process.env.SUPPLIER_API_BASE_URL || "https://api.datamartgh.shop/api/store/v1";
 const API_KEY = process.env.SUPPLIER_API_KEY || "";
 
-export type SupplierNetwork = "mtn" | "telecel" | "at_bigdata" | "at_ishare";
+// Our internal short network keys, mapped to DataMart's expected values.
+export type SupplierNetwork = "mtn" | "telecel" | "airteltigo";
+
+const NETWORK_MAP: Record<SupplierNetwork, string> = {
+  mtn: "YELLO",
+  telecel: "TELECEL",
+  airteltigo: "AT_PREMIUM",
+};
 
 export type SupplierPackage = {
-  package_id: number;
+  package_id: number | string; // capacity is used as the identity here, id kept for interface compatibility
   label: string;
   price: number;
   data_size: number;
@@ -44,55 +57,73 @@ async function supplierFetch(path: string, options: RequestInit = {}) {
   const data = await res.json().catch(() => null);
 
   if (!res.ok || !data || data.status !== "success") {
-    throw new Error(
-      `Supplier API error (${res.status}): ${data ? JSON.stringify(data) : "no response body"}`
-    );
+    const message = data ? JSON.stringify(data) : `HTTP ${res.status} with no response body`;
+    throw new Error(`Supplier API error (${res.status}): ${message}`);
   }
 
-  return data;
+  return data.data;
 }
 
+// Live product catalog + pricing for one network.
+// NOTE: the exact shape of GET /products isn't fully documented by DataMart -
+// this parses a reasonable structure (array of items with network/capacity/price)
+// and should be double-checked against a real response after the first sync;
+// adjust the field names below if their actual response differs.
 export async function getPackages(network: SupplierNetwork): Promise<SupplierPackage[]> {
-  const data = await supplierFetch(`/packages?network=${network}`);
-  return data.packages as SupplierPackage[];
+  const data = await supplierFetch(`/products`);
+  const products: any[] = Array.isArray(data) ? data : data?.products || [];
+  const apiNetwork = NETWORK_MAP[network];
+
+  return products
+    .filter((p) => p.network === apiNetwork)
+    .map((p) => ({
+      package_id: p.capacity, // DataMart identifies bundles by network+capacity, not a separate ID
+      label: String(p.capacity),
+      price: Number(p.price),
+      data_size: Number(p.capacity),
+    }));
 }
 
 export async function placeOrder(params: {
   network: SupplierNetwork;
   beneficiary: string;
-  packageId: number;
+  packageId: number; // the capacity (GB) for this network - see getPackages() above
 }) {
-  const data = await supplierFetch(`/place-order`, {
+  const data = await supplierFetch(`/orders`, {
     method: "POST",
+    headers: { "X-Idempotency-Key": uuid() },
     body: JSON.stringify({
-      network: params.network,
-      beneficiary: params.beneficiary,
-      "pa_data-bundle-packages": params.packageId,
+      phoneNumber: params.beneficiary,
+      network: NETWORK_MAP[params.network],
+      capacity: params.packageId,
     }),
   });
 
   return {
-    orderId: data.order_id as number,
-    amount: data.amount as number,
-    network: data.network as string,
-    beneficiary: data.beneficiary as string,
+    orderId: data.order.reference as string, // their reference - store this as our supplierOrderId
+    amount: data.order.price as number,
+    network: data.order.network as string,
+    beneficiary: data.order.phoneNumber as string,
+    status: data.order.status as string, // "pending" - completion arrives via webhook
   };
 }
 
-export async function getOrderStatus(orderId: number | string) {
-  const data = await supplierFetch(`/order-status?order_id=${orderId}`);
+export async function getOrderStatus(reference: string) {
+  const data = await supplierFetch(`/orders/${reference}`);
   return {
-    orderId: data.order_id as number,
-    orderStatus: data.order_status as string, // e.g. "Delivered"
-    amount: data.amount as number,
+    orderId: data.reference as string,
+    orderStatus: data.status as string, // "pending" | "completed" | "failed" | "refunded"
+    amount: data.price as number,
   };
 }
 
 export async function getWalletBalance(): Promise<number> {
-  const data = await supplierFetch(`/wallet-balance`);
-  return data.balance as number;
+  const data = await supplierFetch(`/wallet/balance`);
+  // "deposit" is the pool POST /orders spends from - "earnings" is unrelated
+  // storefront revenue on DataMart's own side, not something we can spend via API.
+  return data.deposit.balance as number;
 }
 
-// Admin dashboard uses this to warn when the mydatagigs wallet is running low,
-// since a low balance there means paid customer orders will start failing.
+// Admin dashboard uses this to warn when the DataMart deposit balance is running
+// low, since a low balance there means paid customer orders will start failing.
 export const LOW_BALANCE_THRESHOLD = 50; // GHS - adjust as needed

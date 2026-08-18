@@ -10,11 +10,13 @@ function noStoreResponse() {
   return res;
 }
 
+// POST is the primary method now - avoids any ambiguity around GET request caching.
 export async function POST() {
   clearSessionCookie();
   return noStoreResponse();
 }
 
+// Kept for backwards compatibility / direct navigation.
 export async function GET() {
   clearSessionCookie();
   const res = NextResponse.redirect(new URL("/", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"));

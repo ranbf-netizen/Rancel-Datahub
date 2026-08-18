@@ -38,25 +38,28 @@ export default function AdminOrdersPage() {
       <h1 className="text-2xl font-bold">Orders</h1>
 
       <h2 className="mt-6 text-lg font-semibold">Data Bundle Orders</h2>
-      <div className="overflow-x-auto"><table className="mt-2 w-full min-w-[640px] text-sm">
+      <div className="overflow-x-auto"><table className="mt-2 w-full min-w-[720px] text-sm">
         <thead>
           <tr className="border-b border-ink/10 text-left text-xs uppercase text-ink/50">
-            <th className="py-2">Customer</th><th>Bundle</th><th>Recipient</th><th>Amount</th><th>Payment</th><th>Fulfillment</th><th></th>
+            <th className="py-2">Customer</th><th>Bundle</th><th>Recipient</th><th>Amount</th><th>Payment</th><th>Fulfillment</th><th>Failure reason</th><th></th>
           </tr>
         </thead>
         <tbody>
           {dataOrders.map((o) => (
             <tr key={o.id} className="border-b border-ink/5">
-              <td className="py-2">{o.user.name}</td>
+              <td className="py-2">{o.user ? o.user.name : <span className="text-slate">Guest · {o.beneficiaryNumber}</span>}</td>
               <td>{o.bundle.dataSizeGb}GB {o.bundle.network.toUpperCase()}</td>
               <td>{o.beneficiaryNumber}</td>
               <td>GH₵ {o.amount.toFixed(2)}</td>
               <td>{o.paymentStatus}</td>
               <td>{o.fulfillmentStatus}</td>
+              <td className="max-w-[280px] whitespace-normal break-words text-xs text-ghRed">
+                {o.failureReason || "—"}
+              </td>
               <td>
-                {o.paymentStatus === "PENDING" && o.paystackReference && (
+                {(o.paymentStatus === "PENDING" || o.fulfillmentStatus === "FAILED") && o.paystackReference && (
                   <button
-                    className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-sand disabled:opacity-50"
+                    className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
                     disabled={checkingRef === o.paystackReference}
                     onClick={() => checkNow(o.paystackReference)}
                   >
@@ -79,7 +82,7 @@ export default function AdminOrdersPage() {
         <tbody>
           {pinOrders.map((o) => (
             <tr key={o.id} className="border-b border-ink/5">
-              <td className="py-2">{o.user.name}</td>
+              <td className="py-2">{o.user ? o.user.name : <span className="text-slate">Guest{o.guestPhone ? ` · ${o.guestPhone}` : ""}</span>}</td>
               <td>{o.examType} {o.year}</td>
               <td>GH₵ {o.amount.toFixed(2)}</td>
               <td>{o.paymentStatus}</td>
@@ -87,7 +90,7 @@ export default function AdminOrdersPage() {
               <td>
                 {o.paymentStatus === "PENDING" && o.paystackReference && (
                   <button
-                    className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-sand disabled:opacity-50"
+                    className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
                     disabled={checkingRef === o.paystackReference}
                     onClick={() => checkNow(o.paystackReference)}
                   >

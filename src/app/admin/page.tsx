@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 
 export default function AdminOverview() {
   const [wallet, setWallet] = useState<{ balance?: number; low?: boolean; error?: string } | null>(null);
@@ -27,8 +28,8 @@ export default function AdminOverview() {
           <>
             <p className="mt-2 text-3xl font-bold">GH₵ {wallet.balance.toFixed(2)}</p>
             {wallet.low && (
-              <p className="mt-2 text-sm font-medium text-red-600">
-                ⚠ Balance is low — top up on mydatagigs.com or customer orders will start failing.
+              <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-red-600">
+                <AlertTriangle size={14} /> Balance is low — top up on mydatagigs.com or customer orders will start failing.
               </p>
             )}
           </>

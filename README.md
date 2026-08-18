@@ -66,15 +66,19 @@ customer closes the tab mid-payment, etc). Three layers close this gap:
    resolves *any* order still Pending after 10 minutes, catching cases where a customer never
    returns to the site at all. Fully automatic once deployed — see below.
 
-**To activate the sweep once deployed on Vercel:**
-1. `vercel.json` in this repo already defines the schedule (every 5 minutes).
-2. In your Vercel project settings, add an environment variable `CRON_SECRET` set to a long
-   random string (must match the same value in your `.env`).
-3. Vercel automatically calls the sweep endpoint on schedule with that secret — no further setup.
+**To activate the sweep once deployed:**
+Vercel's free (Hobby) plan only allows cron jobs that run once per day, not every few minutes.
+`vercel.json` is set to run the sweep once daily (3am) as a safety net — that alone is too slow
+to be the main fix, so pair it with a free external scheduler for real-time coverage:
 
-If you deploy somewhere other than Vercel without built-in cron, use a free external scheduler
-(e.g. cron-job.org) to call `GET https://yourdomain.com/api/cron/sweep-pending` every 5 minutes
-with header `Authorization: Bearer <your CRON_SECRET>`.
+1. Sign up free at cron-job.org (or any similar service).
+2. Create a job that calls `GET https://yourdomain.com/api/cron/sweep-pending` every 5 minutes.
+3. Add a custom header: `Authorization: Bearer <your CRON_SECRET>` (same value as set in Vercel).
+4. In Vercel's project settings, add an environment variable `CRON_SECRET` set to a long random
+   string (must match the value used in the header above).
+
+If you later upgrade to Vercel Pro, you can instead change `vercel.json`'s schedule back to
+`*/5 * * * *` and drop the external scheduler entirely.
 
 Admin can still manually trigger a check anytime via the "Check now" button on the Orders page —
 useful for resolving a specific order immediately rather than waiting for the next sweep.

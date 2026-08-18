@@ -42,7 +42,16 @@ export function setSessionCookie(token: string) {
 }
 
 export function clearSessionCookie() {
-  cookies().delete(COOKIE_NAME);
+  // Explicitly match the same attributes used when setting it - relying on the
+  // default .delete() shorthand can silently fail to expire a cookie whose
+  // original attributes (secure/sameSite/path) don't match exactly.
+  cookies().set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: new Date(0),
+  });
 }
 
 export function getSession(): SessionPayload | null {
