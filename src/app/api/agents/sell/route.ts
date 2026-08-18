@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { placeOrder } from "@/lib/supplier";
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   // Deduct up front and create the sale record as PROCESSING before calling the
   // supplier, so wallet accounting stays consistent even if fulfillment fails.
-  const sale = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  const sale = await prisma.$transaction(async (tx: any) => {
     await tx.agentProfile.update({
       where: { id: profile.id },
       data: { walletBalance: { decrement: resellerCost } },
