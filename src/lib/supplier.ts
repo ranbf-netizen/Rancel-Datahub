@@ -75,11 +75,11 @@ export async function getPackages(network: SupplierNetwork): Promise<SupplierPac
   const apiNetwork = NETWORK_MAP[network];
 
   return products
-    .filter((p) => p.network === apiNetwork)
+        .filter((p) => p.network === apiNetwork && p.inStock)
     .map((p) => ({
       package_id: p.capacity, // DataMart identifies bundles by network+capacity, not a separate ID
       label: String(p.capacity),
-      price: Number(p.price),
+            price: Number(p.basePrice),
       data_size: Number(p.capacity),
     }));
 }
