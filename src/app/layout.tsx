@@ -6,6 +6,7 @@ import LogoutButton from "./components/LogoutButton";
 import MobileNav from "./components/MobileNav";
 import WhatsAppButton from "./components/WhatsAppButton";
 import Footer from "./components/Footer";
+import AnnouncementBanner from "./components/AnnouncementBanner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/track" className="hover:text-primary">Track Order</Link>
               <Link href="/agents" className="hover:text-primary">Become an Agent</Link>
               <Link href="/results" className="hover:text-primary">Results Checker</Link>
+              <Link href="/updates" className="hover:text-primary">Updates</Link>
               {session ? (
                 <>
                   <Link href="/orders" className="hover:text-primary">My Orders</Link>
@@ -60,7 +62,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* Mobile nav */}
             <MobileNav session={session} />
           </div>
+        
         </header>
+<AnnouncementBanner />
 
         <main>{children}</main>
         <Footer />
