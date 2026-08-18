@@ -3,6 +3,7 @@ import { v4 as uuid } from "uuid";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { initializeTransaction } from "@/lib/paystack";
+export const dynamic = "force-dynamic";
 
 // Public: list available exam type/year + price + remaining stock (no serials/pins exposed).
 export async function GET() {

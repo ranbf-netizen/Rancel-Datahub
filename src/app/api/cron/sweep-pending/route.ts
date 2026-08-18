@@ -12,6 +12,8 @@ import { fulfillDataOrder, fulfillPinOrder } from "@/lib/fulfillment";
 // must send: Authorization: Bearer <CRON_SECRET>
 const STALE_AFTER_MINUTES = 10;
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (secret) {
