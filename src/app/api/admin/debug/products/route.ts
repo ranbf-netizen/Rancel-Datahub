@@ -22,12 +22,21 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch(`${baseUrl}/products`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      cache: "no-store",
+    const [productsRes, storeRes, walletRes] = await Promise.all([
+      fetch(`${baseUrl}/products`, { headers: { Authorization: `Bearer ${apiKey}` }, cache: "no-store" }),
+      fetch(`${baseUrl}/store`, { headers: { Authorization: `Bearer ${apiKey}` }, cache: "no-store" }),
+      fetch(`${baseUrl}/wallet/balance`, { headers: { Authorization: `Bearer ${apiKey}` }, cache: "no-store" }),
+    ]);
+    const [products, store, wallet] = await Promise.all([
+      productsRes.json().catch(() => null),
+      storeRes.json().catch(() => null),
+      walletRes.json().catch(() => null),
+    ]);
+    return NextResponse.json({
+      products: { httpStatus: productsRes.status, body: products },
+      store: { httpStatus: storeRes.status, body: store },
+      wallet: { httpStatus: walletRes.status, body: wallet },
     });
-    const data = await res.json().catch(() => null);
-    return NextResponse.json({ httpStatus: res.status, rawResponse: data });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

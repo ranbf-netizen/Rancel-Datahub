@@ -5,6 +5,7 @@ import UnsupportedSimNotice from "./components/UnsupportedSimNotice";
 import FAQAccordion from "./components/FAQAccordion";
 import ScrollFade from "./components/ScrollFade";
 import NetworkIllustration from "./components/NetworkIllustration";
+import LiveDeliveryAnimation from "./components/LiveDeliveryAnimation";
 
 export default function HomePage() {
   return (
@@ -59,6 +60,13 @@ export default function HomePage() {
             <StepCard n="03" title="Enter your number & pay" desc="Secure checkout, seconds to complete." />
             <StepCard n="04" title="Receive your data" desc="Delivered straight to the SIM." />
           </div>
+        </section>
+      </ScrollFade>
+
+      {/* Live delivery animation - interactive, loops continuously */}
+      <ScrollFade>
+        <section className="mx-auto max-w-6xl px-5 pb-16">
+          <LiveDeliveryAnimation />
         </section>
       </ScrollFade>
 

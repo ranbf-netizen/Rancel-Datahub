@@ -65,21 +65,23 @@ async function supplierFetch(path: string, options: RequestInit = {}) {
 }
 
 // Live product catalog + pricing for one network.
-// NOTE: the exact shape of GET /products isn't fully documented by DataMart -
-// this parses a reasonable structure (array of items with network/capacity/price)
-// and should be double-checked against a real response after the first sync;
-// adjust the field names below if their actual response differs.
+// CONFIRMED real response shape (checked via /api/admin/debug/products):
+// { id, network, capacity, mb, displayName, basePrice, sellingPrice, profit, inStock }
+// - basePrice is what POST /orders actually debits from our wallet (the real cost).
+// - sellingPrice is DataMart's OWN suggested storefront price (their profit built in) -
+//   not something we use; we set our own sellingPrice with our own markup instead.
+// - inStock must be respected - an out-of-stock item still appears in the list.
 export async function getPackages(network: SupplierNetwork): Promise<SupplierPackage[]> {
   const data = await supplierFetch(`/products`);
   const products: any[] = Array.isArray(data) ? data : data?.products || [];
   const apiNetwork = NETWORK_MAP[network];
 
   return products
-        .filter((p) => p.network === apiNetwork && p.inStock)
+    .filter((p) => p.network === apiNetwork && p.inStock)
     .map((p) => ({
       package_id: p.capacity, // DataMart identifies bundles by network+capacity, not a separate ID
       label: String(p.capacity),
-            price: Number(p.basePrice),
+      price: Number(p.basePrice),
       data_size: Number(p.capacity),
     }));
 }

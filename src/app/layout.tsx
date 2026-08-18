@@ -62,9 +62,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* Mobile nav */}
             <MobileNav session={session} />
           </div>
-        
         </header>
-<AnnouncementBanner />
+        <AnnouncementBanner />
 
         <main>{children}</main>
         <Footer />
