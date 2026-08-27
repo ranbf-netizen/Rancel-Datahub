@@ -42,19 +42,23 @@ model User {
 
   dataOrders DataOrder[]
   pinOrders  PinOrder[]
+  afaOrders  AfaOrder[]
   agentProfile AgentProfile?
 }
 
-// Cached copy of the supplier's package catalog, with our own selling price layered on top.
+// Manually entered by admin (Cledanet has no catalog/packages endpoint to sync
+// from) - network must be one of Cledanet's exact values: MTN, TELECEL,
+// AIRTELTIGO_ISHARE, AIRTELTIGO_BIGTIME. Ordering uses network + dataSizeGb
+// directly; supplierPackageId is kept for backward compatibility but unused.
 model DataBundle {
   id                String   @id @default(uuid())
-  network           String // mtn | telecel | at_bigdata | at_ishare
+  network           String
   label              String // e.g. "10" (GB)
   dataSizeGb        Float
-  supplierPackageId  String // package_id from supplier
-  costPrice          Float // supplier's price
+  supplierPackageId  String // unused for Cledanet - kept for schema compatibility
+  costPrice          Float // what YOU pay Cledanet per this bundle (enter manually)
   sellingPrice       Float // what the customer pays (admin sets this)
-  validityDays       Int      @default(30) // admin-editable; supplier API doesn't return this
+  validityDays       Int      @default(30)
   active             Boolean  @default(true)
   updatedAt          DateTime @updatedAt
 
@@ -124,6 +128,37 @@ model PinOrder {
   updatedAt         DateTime      @updatedAt
 }
 
+model AfaOrder {
+  id                String        @id @default(uuid())
+  userId            String?
+  user              User?         @relation(fields: [userId], references: [id])
+  agentId           String? // set when an agent creates this offer for their own customer (wallet-paid, no Paystack)
+  agent             AgentProfile? @relation(fields: [agentId], references: [id])
+  guestEmail        String? // synthetic if not provided - required by Paystack (customer-direct flow only)
+  fullName          String
+  phoneNumber       String
+  idNumber          String
+  dateOfBirth       String // "YYYY-MM-DD"
+  town              String
+  occupation        String
+  region            String
+  cropProduce       String?
+  amount            Float
+  paystackReference String?       @unique // null for agent-created offers (wallet-paid instead)
+  paymentStatus     PaymentStatus @default(PENDING)
+  supplierId        String? // Cledanet's registration id, once submitted
+  supplierStatus    String? // raw status text from Cledanet - e.g. "PENDING"
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+// Single-row settings table for the AFA registration price, admin-editable.
+model AfaSettings {
+  id    String @id @default("default")
+  price Float  @default(10)
+}
+
 model Refund {
   id           String   @id @default(uuid())
   orderType    String // "data" | "pin"
@@ -176,6 +211,7 @@ model AgentProfile {
 
   transactions AgentTransaction[]
   sales        AgentSale[]
+  afaOrders    AfaOrder[]
 }
 
 model AgentTransaction {

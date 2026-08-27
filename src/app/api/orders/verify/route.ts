@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyTransaction } from "@/lib/paystack";
-import { fulfillDataOrder, fulfillPinOrder } from "@/lib/fulfillment";
+import { fulfillDataOrder, fulfillPinOrder, fulfillAfaOrder } from "@/lib/fulfillment";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 // Actively asks Paystack "did this payment go through?" instead of only waiting
 // for their webhook to arrive. Used in two places:
@@ -18,13 +20,14 @@ export async function POST(req: NextRequest) {
   // Figure out which kind of order this reference belongs to.
   const dataOrder = await prisma.dataOrder.findUnique({ where: { paystackReference: reference } });
   const pinOrder = dataOrder ? null : await prisma.pinOrder.findUnique({ where: { paystackReference: reference } });
+  const afaOrder = dataOrder || pinOrder ? null : await prisma.afaOrder.findUnique({ where: { paystackReference: reference } });
 
-  if (!dataOrder && !pinOrder) {
+  if (!dataOrder && !pinOrder && !afaOrder) {
     return NextResponse.json({ error: "Order not found." }, { status: 404 });
   }
 
   // Only the order's owner or an admin can trigger a check.
-  const ownerId = dataOrder ? dataOrder.userId : pinOrder!.userId;
+  const ownerId = dataOrder ? dataOrder.userId : pinOrder ? pinOrder.userId : afaOrder!.userId;
   if (ownerId !== session.userId && session.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -45,10 +48,17 @@ export async function POST(req: NextRequest) {
     if (pinOrder && pinOrder.paymentStatus === "PENDING") {
       await prisma.pinOrder.update({ where: { id: pinOrder.id }, data: { paymentStatus: "FAILED" } });
     }
+    if (afaOrder && afaOrder.paymentStatus === "PENDING") {
+      await prisma.afaOrder.update({ where: { id: afaOrder.id }, data: { paymentStatus: "FAILED" } });
+    }
     return NextResponse.json({ paystackStatus, fulfilled: false });
   }
 
   // Paystack confirms it was paid - fulfill it now (safe even if the webhook already did this).
-  const result = dataOrder ? await fulfillDataOrder(reference) : await fulfillPinOrder(reference);
+  const result = dataOrder
+    ? await fulfillDataOrder(reference)
+    : pinOrder
+    ? await fulfillPinOrder(reference)
+    : await fulfillAfaOrder(reference);
   return NextResponse.json({ paystackStatus, fulfilled: true, result });
 }

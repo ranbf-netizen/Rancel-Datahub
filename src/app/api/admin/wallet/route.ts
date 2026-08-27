@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getWalletBalance, LOW_BALANCE_THRESHOLD } from "@/lib/supplier";
 
-// This is OUR deposit balance on DataMart, not a customer wallet.
+// This is OUR balance on Cledanet, not a customer wallet.
 // A low balance here means paid customer orders will start failing to fulfill.
 export async function GET() {
   const session = getSession();

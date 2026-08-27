@@ -1,13 +1,12 @@
 import { prisma } from "@/lib/db";
-import { placeOrder } from "@/lib/supplier";
+import { placeOrder, submitAfaRegistration } from "@/lib/supplier";
 
 // Called once we're SURE a data order was paid (from webhook or manual verify).
-// With DataMart, placing the order only confirms it was ACCEPTED - actual
-// delivery completion arrives later via their webhook (order.completed /
-// order.failed), handled in /api/webhooks/datamart/route.ts. This function
-// only gets the order to PROCESSING with their reference stored; the sweep
-// (sweep-pending) also double-checks anything stuck in PROCESSING too long,
-// in case their webhook never arrives.
+// With Cledanet, placing the order only confirms it was ACCEPTED (status
+// "PENDING") - actual delivery completion arrives later, either via their
+// optional callback (see /api/webhooks/cledanet/route.ts) or via the sweep
+// polling GET /order/:id (sweep-pending), since the callback's exact payload
+// shape isn't confirmed - the sweep's polling is the reliable source of truth.
 export async function fulfillDataOrder(reference: string) {
   const order = await prisma.dataOrder.findUnique({
     where: { paystackReference: reference },
@@ -18,7 +17,7 @@ export async function fulfillDataOrder(reference: string) {
   // PAID alone isn't enough - an earlier attempt may have been interrupted
   // (e.g. a temporary outage) right after marking PAID but before ever calling
   // the supplier, which would otherwise leave the order stuck forever. PROCESSING
-  // is also not final - that just means we're waiting on DataMart's webhook.
+  // is also not final - that just means we're waiting on confirmation.
   if (
     order.paymentStatus === "PAID" &&
     (order.fulfillmentStatus === "DELIVERED" || order.fulfillmentStatus === "FAILED")
@@ -41,11 +40,11 @@ export async function fulfillDataOrder(reference: string) {
     const result = await placeOrder({
       network: order.bundle.network as any,
       beneficiary: order.beneficiaryNumber,
-      packageId: Number(order.bundle.supplierPackageId),
+      packageId: order.bundle.dataSizeGb, // Cledanet identifies bundles by size, not a package ID
     });
 
-    // Still PROCESSING - store their reference so the webhook can match it back
-    // to this order. Only their webhook (or the fallback sweep) marks DELIVERED.
+    // Still PROCESSING - store their order id so the sweep/webhook can match it
+    // back to this order. Only that confirmation marks DELIVERED.
     const updated = await prisma.dataOrder.update({
       where: { id: order.id },
       data: { supplierOrderId: result.orderId },
@@ -69,14 +68,16 @@ export async function fulfillDataOrder(reference: string) {
   }
 }
 
-// Called by the DataMart webhook (order.completed / order.failed) once they've
-// actually finished delivering - or not - a bundle. Matches by their reference
-// (stored as supplierOrderId when the order was placed).
+// Called once we have a confirmed final delivery outcome for a data order -
+// either from the sweep's poll of GET /order/:id, or from the webhook (treated
+// as a "go check now" trigger rather than a trusted source, since Cledanet's
+// callback payload shape and signing scheme aren't documented). Matches by
+// their order id (stored as supplierOrderId when the order was placed).
 export async function resolveDataOrderDelivery(supplierOrderId: string, outcome: "DELIVERED" | "FAILED", failureReason?: string) {
   const order = await prisma.dataOrder.findFirst({ where: { supplierOrderId } });
   if (!order) return { found: false as const };
   if (order.fulfillmentStatus === "DELIVERED" || order.fulfillmentStatus === "FAILED") {
-    return { found: true as const, alreadyProcessed: true as const }; // already resolved, ignore duplicate webhook delivery
+    return { found: true as const, alreadyProcessed: true as const }; // already resolved
   }
 
   await prisma.dataOrder.update({
@@ -113,6 +114,7 @@ export async function fulfillAgentTopup(reference: string) {
 
   return { found: true as const, alreadyProcessed: false as const };
 }
+
 export async function fulfillPinOrder(reference: string) {
   const order = await prisma.pinOrder.findUnique({ where: { paystackReference: reference } });
   if (!order) return { found: false as const };
@@ -150,4 +152,51 @@ export async function fulfillPinOrder(reference: string) {
   ]);
 
   return { found: true as const, alreadyProcessed: false as const, order: updatedOrder };
+}
+
+// Called once we're SURE an AFA registration order was paid. Submits the
+// registration to Cledanet. There's no documented GET-by-id endpoint for AFA
+// status specifically, so once submitted we rely on Cledanet's optional
+// callback for status updates - admin can also check Cledanet's own dashboard
+// directly as the ultimate source of truth if a registration seems stuck.
+export async function fulfillAfaOrder(reference: string) {
+  const order = await prisma.afaOrder.findUnique({ where: { paystackReference: reference } });
+  if (!order) return { found: false as const };
+  if (order.paymentStatus === "PAID" && order.supplierId) {
+    return { found: true as const, alreadyProcessed: true as const, order };
+  }
+
+  await prisma.afaOrder.update({ where: { id: order.id }, data: { paymentStatus: "PAID" } });
+
+  try {
+    const result = await submitAfaRegistration({
+      fullName: order.fullName,
+      phoneNumber: order.phoneNumber,
+      idNumber: order.idNumber,
+      dateOfBirth: order.dateOfBirth,
+      town: order.town,
+      occupation: order.occupation,
+      region: order.region,
+      cropProduce: order.cropProduce || undefined,
+    });
+
+    const updated = await prisma.afaOrder.update({
+      where: { id: order.id },
+      data: { supplierId: result.supplierId, supplierStatus: result.status },
+    });
+    return { found: true as const, alreadyProcessed: false as const, order: updated };
+  } catch (err: any) {
+    const updated = await prisma.afaOrder.update({
+      where: { id: order.id },
+      data: { failureReason: err.message },
+    });
+    await prisma.refund.create({
+      data: {
+        orderType: "afa",
+        orderId: order.id,
+        reason: `AFA submission failed after payment: ${err.message}`,
+      },
+    });
+    return { found: true as const, alreadyProcessed: false as const, order: updated };
+  }
 }

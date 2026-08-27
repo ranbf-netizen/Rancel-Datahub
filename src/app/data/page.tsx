@@ -16,29 +16,33 @@ type Bundle = {
 };
 
 const NETWORK_LABELS: Record<string, string> = {
-  mtn: "MTN",
-  telecel: "Telecel",
-  airteltigo: "AirtelTigo",
+  MTN: "MTN",
+  TELECEL: "Telecel",
+  AIRTELTIGO_ISHARE: "AirtelTigo (iShare)",
+  AIRTELTIGO_BIGTIME: "AirtelTigo (BigTime)",
 };
 
 const NETWORK_DOT: Record<string, string> = {
-  mtn: "bg-mtn",
-  telecel: "bg-telecel",
-  airteltigo: "bg-airteltigo",
+  MTN: "bg-mtn",
+  TELECEL: "bg-telecel",
+  AIRTELTIGO_ISHARE: "bg-airteltigo",
+  AIRTELTIGO_BIGTIME: "bg-airteltigo",
 };
 
 // Active tab + Buy button per network, using each network's real brand color.
 // MTN yellow needs dark text for contrast; Telecel red and AirtelTigo blue use white text.
 const NETWORK_ACTIVE_CHIP: Record<string, string> = {
-  mtn: "!border-transparent !bg-mtn !text-ink",
-  telecel: "!border-transparent !bg-telecel !text-white",
-  airteltigo: "!border-transparent !bg-airteltigo !text-white",
+  MTN: "!border-transparent !bg-mtn !text-ink",
+  TELECEL: "!border-transparent !bg-telecel !text-white",
+  AIRTELTIGO_ISHARE: "!border-transparent !bg-airteltigo !text-white",
+  AIRTELTIGO_BIGTIME: "!border-transparent !bg-airteltigo !text-white",
 };
 
 const NETWORK_BUY_BUTTON: Record<string, string> = {
-  mtn: "!bg-mtn !text-ink hover:!bg-mtn/90",
-  telecel: "!bg-telecel !text-white hover:!bg-telecel/90",
-  airteltigo: "!bg-airteltigo !text-white hover:!bg-airteltigo/90",
+  MTN: "!bg-mtn !text-ink hover:!bg-mtn/90",
+  TELECEL: "!bg-telecel !text-white hover:!bg-telecel/90",
+  AIRTELTIGO_ISHARE: "!bg-airteltigo !text-white hover:!bg-airteltigo/90",
+  AIRTELTIGO_BIGTIME: "!bg-airteltigo !text-white hover:!bg-airteltigo/90",
 };
 
 type SortKey = "price-asc" | "price-desc" | "size-asc" | "size-desc";
@@ -52,7 +56,7 @@ export default function DataPage() {
 
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [network, setNetwork] = useState(searchParams.get("network") || "mtn");
+  const [network, setNetwork] = useState(searchParams.get("network") || "MTN");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("size-asc");
   const [selected, setSelected] = useState<Bundle | null>(null);

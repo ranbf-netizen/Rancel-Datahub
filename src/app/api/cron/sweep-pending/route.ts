@@ -9,10 +9,10 @@ import { getOrderStatus } from "@/lib/supplier";
 // on a webhook that might not arrive. Meant to be called on a schedule
 // (see vercel.json), not by users.
 //
-// Also checks data orders stuck at PROCESSING (paid, order placed with
-// DataMart, but never got a completion webhook) - DataMart explicitly does
-// NOT retry failed webhook deliveries, so if our endpoint has any downtime
-// at all, that confirmation is gone for good unless we actively poll for it.
+// Also checks data orders stuck at PROCESSING (paid, order placed with the
+// supplier, but never got a completion callback) - Cledanet's callback
+// mechanism isn't fully documented, so if it ever fails to arrive, this
+// active poll of GET /order/:id is what actually resolves the order.
 //
 // Protected by CRON_SECRET so random people can't trigger it - the caller
 // must send: Authorization: Bearer <CRON_SECRET>

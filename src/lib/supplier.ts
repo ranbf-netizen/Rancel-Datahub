@@ -1,41 +1,31 @@
 /**
- * Wrapper around the DataMart Agent Store API (api.datamartgh.shop).
+ * Wrapper around the Cledanet data bundle supplier API (backend.mycledanet.com).
  *
- * Key differences from the previous supplier (mydatagigs.com) that the rest
- * of the app has been updated to account for:
- *  - Orders are placed asynchronously: POST /orders returns "pending"
- *    immediately, then a webhook (order.completed / order.failed) fires
- *    roughly 30 seconds later with the real outcome. See
- *    /api/webhooks/datamart/route.ts and fulfillDataOrder() in
- *    lib/fulfillment.ts, which now leaves an order at PROCESSING until that
- *    webhook (or the fallback status-check sweep) resolves it.
- *  - Only 3 networks, not 4: YELLO (MTN), TELECEL, AT_PREMIUM (AirtelTigo).
- *  - POST /orders requires a unique X-Idempotency-Key per attempt (a UUID) -
- *    resending the same key returns the original response instead of
- *    double-charging the wallet.
- *  - Auth: Authorization: Bearer <SUPPLIER_API_KEY>
+ * Key things that differ from previous suppliers we've integrated:
+ *  - Response envelope uses a BOOLEAN `status` field (true/false), not a string
+ *    like "success" - and the payload lives under `payload`, not `data`.
+ *  - Prices AND wallet balance are returned in PESEWAS, not cedis (divide by 100
+ *    everywhere we display or store a GHS amount).
+ *  - Auth header is `X-API-Key`, not `Authorization: Bearer`.
+ *  - There is NO catalog/packages endpoint - Cledanet only exposes balance,
+ *    place-order, and order-status. Bundle sizes/prices must be entered manually
+ *    by admin (see /admin/bundles - "Add Bundle" instead of "Sync from supplier").
+ *  - Networks use these exact 4 values, used directly as both our DB values and
+ *    Cledanet's API values (no translation table, to avoid the mapping-mismatch
+ *    bugs we hit with the previous two suppliers): MTN, TELECEL,
+ *    AIRTELTIGO_ISHARE, AIRTELTIGO_BIGTIME.
+ *  - UNCONFIRMED: the exact set of order status strings beyond "PENDING" (their
+ *    docs only show that one example). getOrderStatus() below treats "COMPLETED"
+ *    and "DELIVERED" as success, "FAILED"/"CANCELLED"/"REJECTED" as failure, and
+ *    anything else as still-in-progress. If Cledanet uses different wording,
+ *    orders will just stay PROCESSING until this is corrected - check via the
+ *    admin "Check delivery" button, which surfaces the raw status text returned.
  */
 
-import { v4 as uuid } from "uuid";
-
-const BASE_URL = process.env.SUPPLIER_API_BASE_URL || "https://api.datamartgh.shop/api/store/v1";
+const BASE_URL = process.env.SUPPLIER_API_BASE_URL || "https://backend.mycledanet.com/api";
 const API_KEY = process.env.SUPPLIER_API_KEY || "";
 
-// Our internal short network keys, mapped to DataMart's expected values.
-export type SupplierNetwork = "mtn" | "telecel" | "airteltigo";
-
-const NETWORK_MAP: Record<SupplierNetwork, string> = {
-  mtn: "YELLO",
-  telecel: "TELECEL",
-  airteltigo: "AT_PREMIUM",
-};
-
-export type SupplierPackage = {
-  package_id: number | string; // capacity is used as the identity here, id kept for interface compatibility
-  label: string;
-  price: number;
-  data_size: number;
-};
+export type SupplierNetwork = "MTN" | "TELECEL" | "AIRTELTIGO_ISHARE" | "AIRTELTIGO_BIGTIME";
 
 async function supplierFetch(path: string, options: RequestInit = {}) {
   if (!API_KEY) {
@@ -47,7 +37,7 @@ async function supplierFetch(path: string, options: RequestInit = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${API_KEY}`,
+      "X-API-Key": API_KEY,
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
@@ -56,107 +46,96 @@ async function supplierFetch(path: string, options: RequestInit = {}) {
 
   const data = await res.json().catch(() => null);
 
-  if (!res.ok || !data || data.status !== "success") {
+  if (!res.ok || !data || data.status !== true) {
     const message = data ? JSON.stringify(data) : `HTTP ${res.status} with no response body`;
     throw new Error(`Supplier API error (${res.status}): ${message}`);
   }
 
-  return data.data;
+  return data.payload;
 }
 
-// Live product catalog + pricing for one network.
-// CONFIRMED real response shape (checked via /api/admin/debug/products):
-// { id, network, capacity, mb, displayName, basePrice, sellingPrice, profit, inStock }
-// - basePrice is what POST /orders actually debits from our wallet (the real cost).
-// - sellingPrice is DataMart's OWN suggested storefront price (their profit built in) -
-//   not something we use; we set our own sellingPrice with our own markup instead.
-// - inStock must be respected - an out-of-stock item still appears in the list.
-export async function getPackages(network: SupplierNetwork): Promise<SupplierPackage[]> {
-  const data = await supplierFetch(`/products`);
-  const products: any[] = Array.isArray(data) ? data : data?.products || [];
-  const apiNetwork = NETWORK_MAP[network];
-
-  return products
-    .filter((p) => p.network === apiNetwork && p.inStock)
-    .map((p) => ({
-      package_id: p.capacity, // DataMart identifies bundles by network+capacity, not a separate ID
-      label: String(p.capacity),
-      price: Number(p.basePrice),
-      data_size: Number(p.capacity),
-    }));
+export async function getWalletBalance(): Promise<number> {
+  const pesewas = await supplierFetch(`/balance`);
+  return Number(pesewas) / 100;
 }
 
 export async function placeOrder(params: {
   network: SupplierNetwork;
   beneficiary: string;
-  packageId: number; // the capacity (GB) for this network - see getPackages() above
+  packageId: number; // the size in GB - Cledanet has no separate package ID, size IS the identity
 }) {
-  const data = await supplierFetch(`/orders`, {
+  const payload = await supplierFetch(`/order`, {
     method: "POST",
-    headers: { "X-Idempotency-Key": uuid() },
     body: JSON.stringify({
-      phoneNumber: params.beneficiary,
-      network: NETWORK_MAP[params.network],
-      capacity: params.packageId,
+      phone: params.beneficiary,
+      size: params.packageId,
+      network: params.network,
+      ...(process.env.NEXT_PUBLIC_APP_URL
+        ? { callback: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/cledanet` }
+        : {}),
     }),
   });
 
   return {
-    orderId: data.order.reference as string, // their reference - store this as our supplierOrderId
-    amount: data.order.price as number,
-    network: data.order.network as string,
-    beneficiary: data.order.phoneNumber as string,
-    status: data.order.status as string, // "pending" - completion arrives via webhook
+    orderId: payload.id as string, // Cledanet's UUID - store as our supplierOrderId
+    orderCode: payload.orderCode as string,
+    amount: Number(payload.price) / 100, // pesewas -> GHS
+    network: payload.network as string,
+    beneficiary: payload.phone as string,
+    status: payload.status as string, // e.g. "PENDING"
   };
 }
 
-export async function getOrderStatus(reference: string) {
-  const data = await supplierFetch(`/order-status/${reference}`);
+const SUCCESS_STATUSES = ["COMPLETED", "DELIVERED", "SUCCESS"];
+const FAILURE_STATUSES = ["FAILED", "CANCELLED", "CANCELED", "REJECTED"];
+
+export async function getOrderStatus(orderId: string) {
+  const payload = await supplierFetch(`/order/${orderId}`);
+  const rawStatus = String(payload.status || "").toUpperCase();
+
+  let orderStatus: string;
+  if (SUCCESS_STATUSES.includes(rawStatus)) orderStatus = "completed";
+  else if (FAILURE_STATUSES.includes(rawStatus)) orderStatus = "failed";
+  else orderStatus = "pending"; // still in progress - covers PENDING and anything unrecognized
+
   return {
-    orderId: data.reference as string,
-    orderStatus: data.orderStatus as string,
-    amount: data.price as number,
+    orderId: payload.id as string,
+    orderStatus,
+    rawStatus, // exposed for debugging via the admin "Check delivery" button
+    amount: Number(payload.price) / 100,
   };
 }
 
-export async function getWalletBalance(): Promise<number> {
-  const data = await supplierFetch(`/wallet/balance`);
-  // "deposit" is the pool POST /orders spends from - "earnings" is unrelated
-  // storefront revenue on DataMart's own side, not something we can spend via API.
-  return data.deposit.balance as number;
-}
+// Admin dashboard uses this to warn when the Cledanet balance is running low,
+// since a low balance means paid customer orders will start failing.
+export const LOW_BALANCE_THRESHOLD = 50; // GHS - adjust as needed
 
-export type SupplierOrderHistoryItem = {
-  reference: string;
-  status: string; // "pending" | "completed" | "failed" | "refunded"
-  placedAt?: string;
-  completedAt?: string;
+// --- AFA Registration (separate from data bundle ordering) ---
+
+export type AfaRegistrationInput = {
+  fullName: string;
+  phoneNumber: string;
+  idNumber: string;
+  dateOfBirth: string; // "YYYY-MM-DD"
+  town: string;
+  occupation: string;
+  region: string;
+  cropProduce?: string;
 };
 
-// Real order history for a phone number, straight from DataMart - GET /customers/:phone.
-// Used to check whether a number has genuinely had a completed delivery before, which
-// survives our own database being reset (e.g. a provider migration) since it's DataMart's
-// own record, not ours. Returns [] if DataMart has no record of this number at all.
-export async function getCustomerHistory(phone: string): Promise<SupplierOrderHistoryItem[]> {
-  try {
-    const data = await supplierFetch(`/customers/${phone}`);
-    const orders: any[] = Array.isArray(data?.orders) ? data.orders : Array.isArray(data) ? data : [];
-    return orders.map((o) => ({
-      reference: o.reference,
-      status: o.status,
-      placedAt: o.placedAt,
-      completedAt: o.completedAt,
-    }));
-  } catch (err: any) {
-    // DataMart returns a 404-style error when the customer has never ordered before -
-    // that's a normal "new number" case, not a real failure, so treat it as empty history.
-    if (String(err.message).includes("404") || String(err.message).toLowerCase().includes("not found")) {
-      return [];
-    }
-    throw err;
-  }
-}
+export async function submitAfaRegistration(input: AfaRegistrationInput) {
+  const payload = await supplierFetch(`/afa-registration`, {
+    method: "POST",
+    body: JSON.stringify({
+      ...input,
+      ...(process.env.NEXT_PUBLIC_APP_URL
+        ? { callback: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/cledanet-afa` }
+        : {}),
+    }),
+  });
 
-// Admin dashboard uses this to warn when the DataMart deposit balance is running
-// low, since a low balance there means paid customer orders will start failing.
-export const LOW_BALANCE_THRESHOLD = 50; // GHS - adjust as needed
+  return {
+    supplierId: payload.id as string,
+    status: payload.status as string, // e.g. "PENDING"
+  };
+}

@@ -12,9 +12,10 @@ type Bundle = {
 };
 
 const NETWORKS: { key: string; label: string; dot: string }[] = [
-  { key: "mtn", label: "MTN", dot: "bg-mtn" },
-  { key: "telecel", label: "Telecel", dot: "bg-telecel" },
-  { key: "airteltigo", label: "AirtelTigo", dot: "bg-airteltigo" },
+  { key: "MTN", label: "MTN", dot: "bg-mtn" },
+  { key: "TELECEL", label: "Telecel", dot: "bg-telecel" },
+  { key: "AIRTELTIGO_ISHARE", label: "AirtelTigo iShare", dot: "bg-airteltigo" },
+  { key: "AIRTELTIGO_BIGTIME", label: "AirtelTigo BigTime", dot: "bg-airteltigo" },
 ];
 
 // Ghana mobile numbers: 0 + 9 digits, common prefixes.
@@ -25,7 +26,7 @@ function isValidGhanaNumber(value: string) {
 export default function QuickBuyWidget() {
   const router = useRouter();
   const [allBundles, setAllBundles] = useState<Bundle[]>([]);
-  const [network, setNetwork] = useState("mtn");
+  const [network, setNetwork] = useState("MTN");
   const [bundleId, setBundleId] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [touched, setTouched] = useState(false);
@@ -61,7 +62,7 @@ export default function QuickBuyWidget() {
         {/* Network selector */}
         <div className="mt-5">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-white/50">Choose network</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {NETWORKS.map((n) => (
               <button
                 key={n.key}

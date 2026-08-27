@@ -12,8 +12,9 @@ type Profile = {
 type Bundle = { id: string; network: string; dataSizeGb: number; sellingPrice: number };
 type Transaction = { id: string; type: string; amount: number; status: string; description: string | null; createdAt: string };
 type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerCost: number; customerPrice: number; profit: number; status: string; createdAt: string };
+type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
 
-type ActivePanel = "sell" | "topup" | "withdraw" | null;
+type ActivePanel = "sell" | "topup" | "withdraw" | "afa" | null;
 
 export default function AgentDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -21,6 +22,8 @@ export default function AgentDashboard() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [bundles, setBundles] = useState<Bundle[]>([]);
+  const [afaOffers, setAfaOffers] = useState<AfaOffer[]>([]);
+  const [afaPrice, setAfaPrice] = useState(0);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState<ActivePanel>(null);
   const [notApplied, setNotApplied] = useState(false);
@@ -41,6 +44,13 @@ export default function AgentDashboard() {
       .finally(() => setLoading(false));
 
     fetch("/api/bundles").then((r) => r.json()).then((d) => setBundles(Array.isArray(d) ? d : []));
+    fetch("/api/agents/afa")
+      .then((r) => r.json())
+      .then((d) => {
+        setAfaOffers(d.offers || []);
+        setAfaPrice(d.price || 0);
+      })
+      .catch(() => {});
   }
 
   useEffect(load, []);
@@ -86,6 +96,7 @@ export default function AgentDashboard() {
       {/* Quick actions */}
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={() => setPanel(panel === "sell" ? null : "sell")} className="btn-primary">Sell Data</button>
+        <button onClick={() => setPanel(panel === "afa" ? null : "afa")} className="btn-secondary">Create AFA Offer</button>
         <button onClick={() => setPanel(panel === "topup" ? null : "topup")} className="btn-secondary">Add Money</button>
         <button onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")} className="btn-secondary">Withdraw</button>
       </div>
@@ -93,6 +104,38 @@ export default function AgentDashboard() {
       {panel === "sell" && <SellPanel bundles={bundles} discountPercent={profile!.discountPercent} onDone={() => { setPanel(null); load(); }} />}
       {panel === "topup" && <TopupPanel onDone={() => setPanel(null)} />}
       {panel === "withdraw" && <WithdrawPanel balance={profile!.walletBalance} onDone={() => { setPanel(null); load(); }} />}
+      {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
+
+      {/* AFA Services */}
+      <h2 className="mt-10 text-lg font-semibold">AFA Services</h2>
+      <div className="card mt-3 border-primary/25 bg-primary/5">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate">Current AFA Price</p>
+        <p className="mt-1 text-xl font-bold text-primary">GH₵ {afaPrice.toFixed(2)}</p>
+        <p className="mt-1 text-xs text-slate">Set by your admin — deducted from your wallet per offer.</p>
+      </div>
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead>
+            <tr className="border-b border-ink/10 text-left text-xs uppercase text-slate">
+              <th className="py-2">Customer</th><th>Phone</th><th>Town</th><th>Occupation</th><th>Amount</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {afaOffers.map((o) => (
+              <tr key={o.id} className="border-b border-ink/5">
+                <td className="py-2">{o.fullName}</td>
+                <td>{o.phoneNumber}</td>
+                <td>{o.town}</td>
+                <td>{o.occupation}</td>
+                <td>GH₵ {o.amount.toFixed(2)}</td>
+                <td>{o.supplierStatus || o.paymentStatus}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {afaOffers.length === 0 && <p className="mt-3 text-sm text-slate">No AFA offers yet.</p>}
+      </div>
 
       {/* Recent sales */}
       <h2 className="mt-10 text-lg font-semibold">Recent Sales</h2>
@@ -178,7 +221,7 @@ function SellPanel({ bundles, discountPercent, onDone }: { bundles: Bundle[]; di
       <select value={bundleId} onChange={(e) => setBundleId(e.target.value)} className="field" required>
         <option value="">Select bundle</option>
         {bundles.map((b) => (
-          <option key={b.id} value={b.id}>{b.dataSizeGb}GB · {b.network.toUpperCase()}</option>
+          <option key={b.id} value={b.id}>{b.dataSizeGb}GB · {b.network.replace(/_/g, " ")}</option>
         ))}
       </select>
       {selected && <p className="text-xs text-slate">Your reseller cost: GH₵ {resellerCost.toFixed(2)} ({discountPercent}% off)</p>}
@@ -248,6 +291,52 @@ function WithdrawPanel({ balance, onDone }: { balance: number; onDone: () => voi
       <p className="text-xs text-slate">We'll settle this to you manually — usually within 24 hours.</p>
       {error && <p className="text-sm text-ghRed">{error}</p>}
       <button className="btn-primary w-full" disabled={loading}>{loading ? "Requesting…" : "Request Withdrawal"}</button>
+    </form>
+  );
+}
+
+function AfaPanel({ price, onDone }: { price: number; onDone: () => void }) {
+  const [form, setForm] = useState({
+    fullName: "", phoneNumber: "", idNumber: "", dateOfBirth: "",
+    town: "", occupation: "", region: "", cropProduce: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function update(field: string, value: string) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const res = await fetch("/api/agents/afa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error || "Could not create offer."); return; }
+    onDone();
+  }
+
+  return (
+    <form onSubmit={submit} className="card mt-4 max-w-lg space-y-3">
+      <p className="text-sm font-semibold">Create AFA Offer — GH₵ {price.toFixed(2)}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <input value={form.fullName} onChange={(e) => update("fullName", e.target.value)} placeholder="Customer full name" className="field col-span-2" required />
+        <input value={form.phoneNumber} onChange={(e) => update("phoneNumber", e.target.value.replace(/[^\d]/g, ""))} placeholder="Phone number" maxLength={10} className="field" required />
+        <input value={form.idNumber} onChange={(e) => update("idNumber", e.target.value)} placeholder="ID number (Ghana Card)" className="field" required />
+        <input value={form.dateOfBirth} onChange={(e) => update("dateOfBirth", e.target.value)} type="date" className="field" required />
+        <input value={form.town} onChange={(e) => update("town", e.target.value)} placeholder="Town" className="field" required />
+        <input value={form.occupation} onChange={(e) => update("occupation", e.target.value)} placeholder="Occupation" className="field" required />
+        <input value={form.region} onChange={(e) => update("region", e.target.value)} placeholder="Region" className="field" required />
+        <input value={form.cropProduce} onChange={(e) => update("cropProduce", e.target.value)} placeholder="Crop/produce (optional)" className="field" />
+      </div>
+      {error && <p className="text-sm text-ghRed">{error}</p>}
+      <button className="btn-primary w-full" disabled={loading}>{loading ? "Submitting…" : `Create Offer — GH₵ ${price.toFixed(2)}`}</button>
     </form>
   );
 }
