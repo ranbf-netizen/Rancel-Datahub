@@ -41,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/track" className="hover:text-primary">Track Order</Link>
               <Link href="/agents" className="hover:text-primary">Become an Agent</Link>
               <Link href="/results" className="hover:text-primary">Results Checker</Link>
+              <Link href="/afa" className="hover:text-primary">AFA Registration</Link>
               <Link href="/updates" className="hover:text-primary">Updates</Link>
               {session ? (
                 <>

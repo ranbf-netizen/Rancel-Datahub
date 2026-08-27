@@ -33,6 +33,7 @@ export default function MobileNav({ session }: { session: Session }) {
             <Link href="/track" onClick={() => setOpen(false)}>Track Order</Link>
             <Link href="/agents" onClick={() => setOpen(false)}>Become an Agent</Link>
             <Link href="/results" onClick={() => setOpen(false)}>Results Checker</Link>
+            <Link href="/afa" onClick={() => setOpen(false)}>AFA Registration</Link>
             <Link href="/updates" onClick={() => setOpen(false)}>Updates</Link>
             {session ? (
               <>

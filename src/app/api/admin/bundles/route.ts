@@ -13,6 +13,13 @@ function requireAdmin() {
   return session;
 }
 
+// The ONLY network values Cledanet accepts. Bundles are sent to Cledanet using
+// this exact string (see fulfillment.ts -> placeOrder), and the customer /data
+// page matches on it case-sensitively, so anything outside this set silently
+// breaks both display and fulfillment. Enforce it here so a bad value can never
+// reach the database, regardless of how the request was made.
+const VALID_NETWORKS = ["MTN", "TELECEL", "AIRTELTIGO_ISHARE", "AIRTELTIGO_BIGTIME"];
+
 // GET: list all bundles (admin view, includes cost + margin)
 export async function GET() {
   if (!requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -28,6 +35,13 @@ export async function POST(req: NextRequest) {
   if (!network || !dataSizeGb || costPrice === undefined || sellingPrice === undefined) {
     return NextResponse.json(
       { error: "Network, size, cost price, and selling price are all required." },
+      { status: 400 }
+    );
+  }
+
+  if (!VALID_NETWORKS.includes(network)) {
+    return NextResponse.json(
+      { error: `Network must be exactly one of: ${VALID_NETWORKS.join(", ")}.` },
       { status: 400 }
     );
   }
