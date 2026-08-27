@@ -6,6 +6,7 @@ export default function AdminOrdersPage() {
   const [dataOrders, setDataOrders] = useState<any[]>([]);
   const [pinOrders, setPinOrders] = useState<any[]>([]);
   const [checkingRef, setCheckingRef] = useState<string | null>(null);
+  const [checkingDelivery, setCheckingDelivery] = useState<string | null>(null);
 
   function load() {
     fetch("/api/admin/orders").then((r) => r.json()).then((d) => {
@@ -30,6 +31,25 @@ export default function AdminOrdersPage() {
       return;
     }
     alert(`Paystack says: ${data.paystackStatus}`);
+    load();
+  }
+
+  // Asks Cledanet directly whether a stuck PROCESSING order actually delivered,
+  // then updates the order to DELIVERED or FAILED accordingly.
+  async function checkDelivery(orderId: string) {
+    setCheckingDelivery(orderId);
+    const res = await fetch("/api/admin/orders/check-delivery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId }),
+    });
+    const data = await res.json();
+    setCheckingDelivery(null);
+    if (!res.ok) {
+      alert(data.error || "Could not check delivery.");
+      return;
+    }
+    alert(`Cledanet says: ${data.supplierStatus}`);
     load();
   }
 
@@ -64,6 +84,15 @@ export default function AdminOrdersPage() {
                     onClick={() => checkNow(o.paystackReference)}
                   >
                     {checkingRef === o.paystackReference ? "Checking…" : "Check now"}
+                  </button>
+                )}
+                {o.paymentStatus === "PAID" && o.fulfillmentStatus === "PROCESSING" && (
+                  <button
+                    className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
+                    disabled={checkingDelivery === o.id}
+                    onClick={() => checkDelivery(o.id)}
+                  >
+                    {checkingDelivery === o.id ? "Checking…" : "Check delivery"}
                   </button>
                 )}
               </td>
