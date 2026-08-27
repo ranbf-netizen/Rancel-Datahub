@@ -112,9 +112,9 @@ export default function VerifyNumberWidget() {
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-mtn/40 bg-mtn/10 p-3">
           <Clock size={16} className="mt-0.5 shrink-0 text-[#8A6D00]" />
           <div>
-            <p className="text-sm font-semibold text-[#8A6D00]">Activating — almost there</p>
+            <p className="text-sm font-semibold text-[#8A6D00]">Activated — warming up</p>
             <p className="mt-0.5 text-xs text-ink/70">
-              {formatPhone(result.phone)} is being verified. About {result.hoursRemaining}h left before larger bundles deliver instantly.
+              {formatPhone(result.phone)} is active. About {result.hoursRemaining}h left before larger bundles deliver instantly.
             </p>
           </div>
         </div>
