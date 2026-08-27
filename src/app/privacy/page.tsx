@@ -3,14 +3,14 @@ export default function PrivacyPage() {
     <div className="mx-auto max-w-2xl px-5 py-16">
       <p className="text-xs font-semibold uppercase tracking-widest text-primary">Legal</p>
       <h1 className="mt-2 text-3xl font-bold">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-slate">Last updated: August 27, 2026</p>
+      <p className="mt-2 text-sm text-slate">Last updated: [DATE]</p>
 
-      <p className="mt-4 text-sm text-slate">
-  At RanCel DataHub, we respect your privacy and are committed to protecting your
-  personal information. This Privacy Policy explains how we collect, use, store,
-  and protect your data when you use our website and services. By accessing or
-  using our platform, you agree to the practices described in this policy.
-</p>
+      <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-ink/70">
+        This policy is a starting template, not legal advice. Have it reviewed by a lawyer
+        familiar with Ghana&rsquo;s Data Protection Act, 2012 before relying on it with real
+        customers, and confirm whether you must register as a data controller with the Data
+        Protection Commission.
+      </p>
 
       <div className="mt-6 space-y-6 text-sm text-slate">
         <section>
@@ -19,8 +19,8 @@ export default function PrivacyPage() {
             RanCel DataHub (&ldquo;we&rdquo;, &ldquo;us&rdquo;) operates this website, which sells
             mobile data bundles, WAEC/BECE results checker PINs, and AFA registrations to customers
             in Ghana. For the purposes of the Data Protection Act, 2012 (Act 843), the data
-            controller is RanCel DataHub. This policy explains what personal data we collect, why,
-            how we use it, and the rights you have over it.
+            controller is [REGISTERED BUSINESS NAME], contactable at [CONTACT EMAIL]. This policy
+            explains what personal data we collect, why, how we use it, and the rights you have over it.
           </p>
         </section>
 
@@ -83,9 +83,8 @@ export default function PrivacyPage() {
             Under the Data Protection Act, 2012 you have the right to access the personal data we
             hold about you, to correct inaccurate data, to ask us to stop processing or to delete
             your data in certain circumstances, and to complain to the Data Protection Commission of
-            Ghana. To exercise any of these, reach us through our{" "}
-            <a href="/contact" className="text-primary hover:underline">Contact</a> page and we will
-            respond within a reasonable time.
+            Ghana. To exercise any of these, contact us at [CONTACT EMAIL] and we will respond within
+            a reasonable time.
           </p>
         </section>
 
@@ -103,7 +102,8 @@ export default function PrivacyPage() {
           <p className="mt-2">
             We may update this policy from time to time; the &ldquo;last updated&rdquo; date above
             shows when. For any question about your data or this policy, reach us through the{" "}
-            <a href="/contact" className="text-primary hover:underline">Contact</a> page.
+            <a href="/contact" className="text-primary hover:underline">Contact</a> page or at
+            [CONTACT EMAIL].
           </p>
         </section>
       </div>

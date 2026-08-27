@@ -16,7 +16,7 @@ export default function AdminOverview() {
 
       <div className="mt-6 card max-w-md">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink/60">
-          Balance
+          Cledanet balance
         </h2>
         {!wallet && <p className="mt-2 text-sm text-ink/50">Checking…</p>}
         {wallet?.error && (
@@ -29,7 +29,7 @@ export default function AdminOverview() {
             <p className="mt-2 text-3xl font-bold">GH₵ {wallet.balance.toFixed(2)}</p>
             {wallet.low && (
               <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-red-600">
-                <AlertTriangle size={14} /> Balance is low — top up your balance or customer orders will start failing.
+                <AlertTriangle size={14} /> Balance is low — top up your Cledanet balance or customer orders will start failing.
               </p>
             )}
           </>

@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "That bundle is not available." }, { status: 404 });
   }
 
-  const resellerCost = Math.round(bundle.sellingPrice * (1 - profile.discountPercent / 100) * 100) / 100;
+  // Agent reseller cost = our Cledanet cost + 2.4%, so an agent sale always
+  // earns a small margin above what we paid and can never drop below cost.
+  const resellerCost = Math.round(bundle.costPrice * 1.024 * 100) / 100;
   if (profile.walletBalance < resellerCost) {
     return NextResponse.json(
       { error: `Insufficient wallet balance. This bundle costs GH₵ ${resellerCost.toFixed(2)} at your reseller rate.` },

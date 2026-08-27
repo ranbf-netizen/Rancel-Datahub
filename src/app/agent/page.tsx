@@ -9,7 +9,7 @@ type Profile = {
   discountPercent: number;
 };
 
-type Bundle = { id: string; network: string; dataSizeGb: number; sellingPrice: number };
+type Bundle = { id: string; network: string; dataSizeGb: number; sellingPrice: number; costPrice: number };
 type Transaction = { id: string; type: string; amount: number; status: string; description: string | null; createdAt: string };
 type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerCost: number; customerPrice: number; profit: number; status: string; createdAt: string };
 type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
@@ -43,7 +43,7 @@ export default function AgentDashboard() {
       })
       .finally(() => setLoading(false));
 
-    fetch("/api/bundles").then((r) => r.json()).then((d) => setBundles(Array.isArray(d) ? d : []));
+    fetch("/api/agents/bundles").then((r) => r.json()).then((d) => setBundles(Array.isArray(d) ? d : []));
     fetch("/api/agents/afa")
       .then((r) => r.json())
       .then((d) => {
@@ -198,7 +198,7 @@ function SellPanel({ bundles, discountPercent, onDone }: { bundles: Bundle[]; di
   const [loading, setLoading] = useState(false);
 
   const selected = bundles.find((b) => b.id === bundleId);
-  const resellerCost = selected ? Math.round(selected.sellingPrice * (1 - discountPercent / 100) * 100) / 100 : 0;
+  const resellerCost = selected ? Math.round(selected.costPrice * 1.024 * 100) / 100 : 0;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -224,7 +224,7 @@ function SellPanel({ bundles, discountPercent, onDone }: { bundles: Bundle[]; di
           <option key={b.id} value={b.id}>{b.dataSizeGb}GB · {b.network.replace(/_/g, " ")}</option>
         ))}
       </select>
-      {selected && <p className="text-xs text-slate">Your reseller cost: GH₵ {resellerCost.toFixed(2)} ({discountPercent}% off)</p>}
+      {selected && <p className="text-xs text-slate">Your reseller cost: GH₵ {resellerCost.toFixed(2)}</p>}
       <input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value.replace(/[^\d]/g, ""))} placeholder="Recipient number" maxLength={10} className="field" required />
       <input value={customerPrice} onChange={(e) => setCustomerPrice(e.target.value)} placeholder="Amount you charged your customer (GH₵)" type="number" step="0.01" className="field" required />
       {error && <p className="text-sm text-ghRed">{error}</p>}
