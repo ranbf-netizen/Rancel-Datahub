@@ -149,6 +149,7 @@ function Step({ n, text }: { n: number; text: string }) {
   );
 }
 
-function formatPhone(phone: string) {
+function formatPhone(phone?: string | null) {
+  if (!phone) return "";
   return phone.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3");
 }

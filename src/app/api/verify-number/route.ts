@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
   if (!firstDelivered) {
     return NextResponse.json({
       status: "new",
+      phone,
       servable: false,
       recommendation: "activate_first",
       message: "This number hasn't received a delivery from us before.",
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
   if (hoursSince < ACTIVATION_HOURS) {
     return NextResponse.json({
       status: "activating",
+      phone,
       servable: false,
       recommendation: "activate_first",
       hoursRemaining: Math.ceil(ACTIVATION_HOURS - hoursSince),
@@ -51,6 +53,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     status: "verified",
+      phone,
     servable: true,
     recommendation: "sell_any",
     message: "Delivered successfully before.",
