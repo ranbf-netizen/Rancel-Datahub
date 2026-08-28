@@ -151,7 +151,9 @@ export async function resolveDataOrderDelivery(supplierOrderId: string, outcome:
   });
 
   if (outcome === "FAILED") {
-    await clawbackAgentCommission(order, order.paystackReference);
+    if (order.paystackReference) {
+      await clawbackAgentCommission(order, order.paystackReference);
+    }
     await prisma.refund.create({
       data: {
         orderType: "data",
