@@ -50,6 +50,33 @@ export async function fulfillDataOrder(reference: string) {
       data: { supplierOrderId: result.orderId },
       include: { bundle: true },
     });
+
+    // If this order came through an agent's storefront, credit the agent's
+    // markup to their wallet as commission. Done exactly once: we only credit
+    // when no commission transaction already exists for this order's reference.
+    if (order.referredByAgentId && order.agentCommission && order.agentCommission > 0) {
+      const already = await prisma.agentTransaction.findFirst({
+        where: { paystackReference: reference },
+      });
+      if (!already) {
+        await prisma.$transaction([
+          prisma.agentProfile.update({
+            where: { id: order.referredByAgentId },
+            data: { walletBalance: { increment: order.agentCommission } },
+          }),
+          prisma.agentTransaction.create({
+            data: {
+              agentId: order.referredByAgentId,
+              type: "SALE",
+              amount: order.agentCommission,
+              description: `Storefront commission - ${order.bundle.dataSizeGb}GB ${order.bundle.network}`,
+              paystackReference: reference,
+            },
+          }),
+        ]);
+      }
+    }
+
     return { found: true as const, alreadyProcessed: false as const, order: updated };
   } catch (err: any) {
     const updated = await prisma.dataOrder.update({

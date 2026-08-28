@@ -14,7 +14,7 @@ type Transaction = { id: string; type: string; amount: number; status: string; d
 type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerCost: number; customerPrice: number; profit: number; status: string; createdAt: string };
 type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
 
-type ActivePanel = "sell" | "topup" | "withdraw" | "afa" | null;
+type ActivePanel = "sell" | "topup" | "withdraw" | "afa" | "store" | null;
 
 export default function AgentDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -99,12 +99,14 @@ export default function AgentDashboard() {
         <button onClick={() => setPanel(panel === "afa" ? null : "afa")} className="btn-secondary">Create AFA Offer</button>
         <button onClick={() => setPanel(panel === "topup" ? null : "topup")} className="btn-secondary">Add Money</button>
         <button onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")} className="btn-secondary">Withdraw</button>
+        <button onClick={() => setPanel(panel === "store" ? null : "store")} className="btn-secondary">My Store</button>
       </div>
 
       {panel === "sell" && <SellPanel bundles={bundles} discountPercent={profile!.discountPercent} onDone={() => { setPanel(null); load(); }} />}
       {panel === "topup" && <TopupPanel onDone={() => setPanel(null)} />}
       {panel === "withdraw" && <WithdrawPanel balance={profile!.walletBalance} onDone={() => { setPanel(null); load(); }} />}
       {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
+      {panel === "store" && <StorePanel />}
 
       {/* AFA Services */}
       <h2 className="mt-10 text-lg font-semibold">AFA Services</h2>
@@ -337,6 +339,100 @@ function AfaPanel({ price, onDone }: { price: number; onDone: () => void }) {
       </div>
       {error && <p className="text-sm text-ghRed">{error}</p>}
       <button className="btn-primary w-full" disabled={loading}>{loading ? "Submitting…" : `Create Offer — GH₵ ${price.toFixed(2)}`}</button>
+    </form>
+  );
+}
+
+function StorePanel() {
+  const [slug, setSlug] = useState("");
+  const [markup, setMarkup] = useState("");
+  const [savedSlug, setSavedSlug] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/agents/store")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.storeSlug) { setSlug(d.storeSlug); setSavedSlug(d.storeSlug); }
+        if (typeof d.storeMarkup === "number") setMarkup(String(d.storeMarkup));
+      })
+      .catch(() => {});
+  }, []);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null); setMsg(null); setLoading(true);
+    const res = await fetch("/api/agents/store", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, markup: markup === "" ? undefined : Number(markup) }),
+    });
+    const d = await res.json();
+    setLoading(false);
+    if (!res.ok) { setErr(d.error || "Could not save."); return; }
+    setSavedSlug(d.storeSlug);
+    setMsg("Saved. Share your store link with customers.");
+  }
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const link = savedSlug ? `${origin}/store/${savedSlug}` : null;
+
+  return (
+    <form onSubmit={save} className="card mt-4 max-w-md">
+      <p className="text-sm font-semibold">My Store</p>
+      <p className="mt-1 text-xs text-slate">
+        Get a public link customers buy from. They pay the retail price plus your markup, and your
+        markup is added to your wallet as commission on each delivered order.
+      </p>
+
+      <label className="label mt-4">Store name (your link)</label>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-slate">/store/</span>
+        <input
+          className="field"
+          placeholder="kwamedata"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value.toLowerCase())}
+        />
+      </div>
+
+      <label className="label mt-4">Your markup (%)</label>
+      <input
+        className="field"
+        type="number"
+        min={0}
+        max={100}
+        step="0.01"
+        placeholder="e.g. 15"
+        value={markup}
+        onChange={(e) => setMarkup(e.target.value)}
+      />
+      <p className="mt-1 text-xs text-slate">Added on top of retail. This percentage is your commission per sale.</p>
+
+      {err && <p className="mt-3 text-sm text-ghRed">{err}</p>}
+      {msg && <p className="mt-3 text-sm text-primary">{msg}</p>}
+
+      <button className="btn-primary mt-4 w-full" disabled={loading}>
+        {loading ? "Saving…" : "Save store settings"}
+      </button>
+
+      {link && (
+        <div className="mt-4 rounded-lg bg-mist p-3">
+          <p className="text-xs text-slate">Your store link:</p>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="flex-1 break-all text-xs text-ink">{link}</code>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(link)}
+              className="btn-secondary !py-1 !px-3 !text-xs"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

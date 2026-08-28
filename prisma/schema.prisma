@@ -79,6 +79,8 @@ model DataOrder {
   paymentStatus     PaymentStatus     @default(PENDING)
   fulfillmentStatus FulfillmentStatus @default(NOT_STARTED)
   supplierOrderId   String? // order_id returned by mydatagigs
+  referredByAgentId String? // set when the order came through an agent's storefront
+  agentCommission   Float? // the agent's markup portion, credited to their wallet on delivery
   failureReason     String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -207,6 +209,8 @@ model AgentProfile {
   status          AgentStatus @default(PENDING)
   walletBalance   Float       @default(0)
   discountPercent Float       @default(10) // % off the normal selling price for reseller cost
+  storeSlug       String?     @unique // public storefront link name, e.g. /store/kwamedata
+  storeMarkup     Float       @default(0) // % the agent adds on top of retail on their storefront
   createdAt       DateTime    @default(now())
 
   transactions AgentTransaction[]
