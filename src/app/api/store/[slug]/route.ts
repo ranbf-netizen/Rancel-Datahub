@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       email,
       amountGhs: customerPrice,
       reference,
-      callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/track?ref=${reference}`,
+      callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/track?ref=${reference}&store=${params.slug}`,
       metadata: { orderId: order.id, orderType: "data" },
     });
     return NextResponse.json({ orderId: order.id, reference, authorizationUrl: tx.authorization_url });
