@@ -262,18 +262,19 @@ export default function DataPage() {
               required
               autoFocus
             />
-            {numberCheck?.status === "new" && (
-              <p className="mt-2 rounded-lg border border-ghRed/25 bg-ghRed/5 p-2.5 text-xs text-ink/70">
-                This number hasn't received a delivery from us before. New numbers need a 1GB
-                bundle first to activate — larger bundles may not deliver until that's done.
-              </p>
-            )}
-            {numberCheck?.status === "activating" && (
-              <p className="mt-2 rounded-lg border border-mtn/40 bg-mtn/10 p-2.5 text-xs text-ink/70">
-                This number is still being verified (~{numberCheck.hoursRemaining}h left) — it may
-                not deliver instantly yet.
-              </p>
-            )}
+            {false && (
+  <p className="mt-2 rounded-lg border border-ghRed/25 bg-ghRed/5 p-2.5 text-xs text-ink/70">
+    This number hasn't received a delivery from us before. New numbers need a 1GB
+    bundle first to activate — larger bundles may not deliver until that's done.
+  </p>
+)}
+
+{false && (
+  <p className="mt-2 rounded-lg border border-mtn/40 bg-mtn/10 p-2.5 text-xs text-ink/70">
+    This number is still being verified (~{numberCheck?.hoursRemaining}h left) — it may
+    not deliver instantly yet.
+  </p>
+)}
             {status && <p className="mt-3 text-sm text-ghRed">{status}</p>}
             <button className="btn-primary mt-4 w-full" disabled={buying}>
               {buying ? "Starting checkout…" : "Continue to Payment"}
