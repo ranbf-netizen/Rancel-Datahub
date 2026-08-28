@@ -12,6 +12,7 @@ type Profile = {
 type Bundle = { id: string; network: string; dataSizeGb: number; sellingPrice: number; costPrice: number };
 type Transaction = { id: string; type: string; amount: number; status: string; description: string | null; createdAt: string };
 type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerCost: number; customerPrice: number; profit: number; status: string; createdAt: string };
+type StoreOrder = { id: string; dataSizeGb: number; network: string; beneficiaryNumber: string; amount: number; commission: number; paymentStatus: string; fulfillmentStatus: string; createdAt: string };
 type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
 
 type ActivePanel = "sell" | "topup" | "withdraw" | "afa" | "store" | null;
@@ -21,6 +22,7 @@ export default function AgentDashboard() {
   const [stats, setStats] = useState<{ todaySalesCount: number; todayRevenue: number; totalProfit: number; totalSalesCount: number } | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [storeOrders, setStoreOrders] = useState<StoreOrder[]>([]);
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [afaOffers, setAfaOffers] = useState<AfaOffer[]>([]);
   const [afaPrice, setAfaPrice] = useState(0);
@@ -39,6 +41,7 @@ export default function AgentDashboard() {
           setStats(d.stats);
           setTransactions(d.recentTransactions || []);
           setSales(d.recentSales || []);
+          setStoreOrders(d.storeOrders || []);
         }
       })
       .finally(() => setLoading(false));
@@ -137,6 +140,39 @@ export default function AgentDashboard() {
           </tbody>
         </table>
         {afaOffers.length === 0 && <p className="mt-3 text-sm text-slate">No AFA offers yet.</p>}
+      </div>
+
+      {/* Store sales (orders customers placed through the agent's storefront link) */}
+      <h2 className="mt-10 text-lg font-semibold">Store Sales</h2>
+      <p className="text-xs text-slate">Orders customers placed through your store link. Commission is added to your wallet once an order is delivered.</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[620px] text-sm">
+          <thead>
+            <tr className="border-b border-ink/10 text-left text-xs uppercase text-slate">
+              <th className="py-2">Date &amp; time</th><th>Bundle</th><th>Recipient</th><th>Paid</th><th>Commission</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {storeOrders.map((o) => {
+              const delivered = o.fulfillmentStatus === "DELIVERED";
+              const failed = o.fulfillmentStatus === "FAILED";
+              const unpaid = o.paymentStatus !== "PAID";
+              const statusLabel = unpaid ? "Awaiting payment" : delivered ? "Delivered" : failed ? "Failed" : "Processing";
+              const statusClass = delivered ? "text-primary" : failed ? "text-ghRed" : "text-slate";
+              return (
+                <tr key={o.id} className="border-b border-ink/5">
+                  <td className="py-2 whitespace-nowrap">{new Date(o.createdAt).toLocaleString()}</td>
+                  <td className="whitespace-nowrap">{o.dataSizeGb}GB {o.network}</td>
+                  <td>{o.beneficiaryNumber}</td>
+                  <td>GH₵ {o.amount.toFixed(2)}</td>
+                  <td className="text-primary">GH₵ {o.commission.toFixed(2)}</td>
+                  <td className={statusClass}>{statusLabel}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {storeOrders.length === 0 && <p className="mt-3 text-sm text-slate">No store sales yet. Share your store link to start earning commission.</p>}
       </div>
 
       {/* Recent sales */}

@@ -15,13 +15,20 @@ export async function GET() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const [todaySales, allSales, recentTransactions] = await Promise.all([
+  const [todaySales, allSales, recentTransactions, storeOrders] = await Promise.all([
     prisma.agentSale.findMany({ where: { agentId: profile.id, createdAt: { gte: startOfDay } } }),
     prisma.agentSale.findMany({ where: { agentId: profile.id } }),
     prisma.agentTransaction.findMany({
       where: { agentId: profile.id },
       orderBy: { createdAt: "desc" },
       take: 20,
+    }),
+    // Orders customers placed through this agent's storefront link.
+    prisma.dataOrder.findMany({
+      where: { referredByAgentId: profile.id },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      include: { bundle: { select: { dataSizeGb: true, network: true } } },
     }),
   ]);
 
@@ -38,6 +45,17 @@ export async function GET() {
     },
     recentTransactions,
     recentSales: allSales.slice(-10).reverse(),
+    storeOrders: storeOrders.map((o: any) => ({
+      id: o.id,
+      dataSizeGb: o.bundle.dataSizeGb,
+      network: o.bundle.network,
+      beneficiaryNumber: o.beneficiaryNumber,
+      amount: o.amount,
+      commission: o.agentCommission ?? 0,
+      paymentStatus: o.paymentStatus,
+      fulfillmentStatus: o.fulfillmentStatus,
+      createdAt: o.createdAt,
+    })),
   });
 }
 

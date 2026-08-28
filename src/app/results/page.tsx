@@ -57,7 +57,7 @@ export default function ResultsPage() {
 
       <p className="mt-6 text-center text-xs text-slate">
         Didn&rsquo;t get your checker after paying?{" "}
-        <a href="https://ranceldatahub.checkerport.com/old-checkers" className="text-primary hover:underline">
+        <a href={STORE_URL} className="text-primary hover:underline">
           Retrieve it here
         </a>.
       </p>
