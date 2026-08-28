@@ -22,6 +22,22 @@ type Stats = {
 export default function AdminOverview() {
   const [wallet, setWallet] = useState<{ balance?: number; low?: boolean; error?: string } | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const [date, setDate] = useState("");
+  const [dayResult, setDayResult] = useState<{ revenue: number; profit: number; count: number } | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
+
+  async function lookupDate() {
+    if (!date) return;
+    setDayLoading(true);
+    setDayResult(null);
+    try {
+      const r = await fetch(`/api/admin/stats?date=${date}`);
+      const d = await r.json();
+      if (!d.error) setDayResult({ revenue: d.revenue, profit: d.profit, count: d.count });
+    } catch {}
+    setDayLoading(false);
+  }
 
   useEffect(() => {
     fetch("/api/admin/wallet").then((r) => r.json()).then(setWallet).catch(() => {});
@@ -49,18 +65,58 @@ export default function AdminOverview() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink/60">Last 7 days — revenue</h2>
         <div className="mt-4 flex items-end gap-2" style={{ height: 140 }}>
           {stats?.daily.map((d, i) => (
-            <div key={i} className="flex flex-1 flex-col items-center gap-1">
+            <div
+              key={i}
+              className="relative flex flex-1 flex-col items-center gap-1"
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              onClick={() => setHover(hover === i ? null : i)}
+            >
+              {hover === i && (
+                <div className="absolute -top-14 z-10 whitespace-nowrap rounded-lg bg-ink px-3 py-2 text-xs text-white shadow-lg">
+                  <div className="font-semibold">{d.label}</div>
+                  <div>Revenue: GH₵ {d.revenue.toFixed(2)}</div>
+                  <div>Profit: GH₵ {d.profit.toFixed(2)}</div>
+                </div>
+              )}
               <div
-                className="w-full rounded-t bg-primary/80"
+                className={`w-full rounded-t transition-colors ${hover === i ? "bg-primary" : "bg-primary/80"}`}
                 style={{ height: `${(d.revenue / maxRev) * 110}px`, minHeight: d.revenue > 0 ? 4 : 0 }}
-                title={`GH₵ ${d.revenue.toFixed(2)} revenue · GH₵ ${d.profit.toFixed(2)} profit`}
               />
               <span className="text-[10px] text-slate">{d.label}</span>
             </div>
           ))}
           {!stats && <p className="text-sm text-ink/50">Loading…</p>}
         </div>
-        <p className="mt-2 text-xs text-slate">Hover a bar to see that day&rsquo;s revenue and profit.</p>
+        <p className="mt-2 text-xs text-slate">Hover (or tap) a bar to see that day&rsquo;s revenue and profit.</p>
+      </div>
+
+      {/* Single-date lookup */}
+      <div className="mt-4 card">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink/60">Check a specific day</h2>
+        <p className="mt-1 text-xs text-slate">Pick a date to see the revenue and profit earned that day.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field max-w-[200px]" />
+          <button onClick={lookupDate} disabled={!date || dayLoading} className="btn-primary !py-2 disabled:opacity-50">
+            {dayLoading ? "Checking…" : "Check"}
+          </button>
+        </div>
+        {dayResult && (
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-mist p-3">
+              <p className="text-xs uppercase text-slate">Revenue</p>
+              <p className="mt-1 text-xl font-bold">GH₵ {dayResult.revenue.toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg bg-mist p-3">
+              <p className="text-xs uppercase text-slate">Profit</p>
+              <p className="mt-1 text-xl font-bold text-primary">GH₵ {dayResult.profit.toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg bg-mist p-3">
+              <p className="text-xs uppercase text-slate">Paid orders</p>
+              <p className="mt-1 text-xl font-bold">{dayResult.count}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Needs attention */}

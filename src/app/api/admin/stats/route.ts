@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
@@ -13,10 +13,36 @@ function daysAgo(n: number) {
   return startOfDay(new Date(Date.now() - n * 86400000));
 }
 
-export async function GET() {
+export async function GET(_req: NextRequest) {
   const session = getSession();
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "Admin only." }, { status: 403 });
+  }
+
+  // Optional single-date lookup: ?date=YYYY-MM-DD returns revenue/profit for
+  // just that day.
+  const dateParam = _req.nextUrl.searchParams.get("date");
+  if (dateParam) {
+    const dayStart = new Date(`${dateParam}T00:00:00`);
+    if (isNaN(dayStart.getTime())) {
+      return NextResponse.json({ error: "Invalid date." }, { status: 400 });
+    }
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    const dayOrders = await prisma.dataOrder.findMany({
+      where: { paymentStatus: "PAID", createdAt: { gte: dayStart, lt: dayEnd } },
+      include: { bundle: { select: { costPrice: true } } },
+    });
+    let revenue = 0, profit = 0;
+    for (const o of dayOrders) {
+      revenue += o.amount;
+      profit += o.amount - (o.bundle?.costPrice ?? 0) - (o.agentCommission ?? 0);
+    }
+    return NextResponse.json({
+      date: dateParam,
+      revenue: round(revenue),
+      profit: round(profit),
+      count: dayOrders.length,
+    });
   }
 
   const today = startOfDay();

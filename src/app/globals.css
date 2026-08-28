@@ -43,3 +43,21 @@
     @apply rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary;
   }
 }
+
+/* Continuous horizontal marquee for the unsupported-SIM notice */
+@keyframes sim-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-sim-marquee {
+  animation: sim-marquee 22s linear infinite;
+}
+
+/* Soft drifting blobs for the auth (login/register) background */
+@keyframes auth-blob {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(30px, -20px) scale(1.1); }
+  66%  { transform: translate(-20px, 20px) scale(0.95); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+.animate-auth-blob { animation: auth-blob 18s ease-in-out infinite; }

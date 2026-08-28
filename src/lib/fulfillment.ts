@@ -51,31 +51,11 @@ export async function fulfillDataOrder(reference: string) {
       include: { bundle: true },
     });
 
-    // If this order came through an agent's storefront, credit the agent's
-    // markup to their wallet as commission. Done exactly once: we only credit
-    // when no commission transaction already exists for this order's reference.
-    if (order.referredByAgentId && order.agentCommission && order.agentCommission > 0) {
-      const already = await prisma.agentTransaction.findFirst({
-        where: { paystackReference: reference },
-      });
-      if (!already) {
-        await prisma.$transaction([
-          prisma.agentProfile.update({
-            where: { id: order.referredByAgentId },
-            data: { walletBalance: { increment: order.agentCommission } },
-          }),
-          prisma.agentTransaction.create({
-            data: {
-              agentId: order.referredByAgentId,
-              type: "SALE",
-              amount: order.agentCommission,
-              description: `Storefront commission - ${order.bundle.dataSizeGb}GB ${order.bundle.network}`,
-              paystackReference: reference,
-            },
-          }),
-        ]);
-      }
-    }
+    // Commission is credited at PAYMENT (here — this runs the moment payment is
+    // confirmed), not at delivery, because Cledanet's delivery confirmation can
+    // lag. If the order later fails and is refunded, the commission is clawed
+    // back (see clawbackAgentCommission in the failure paths below).
+    await creditAgentCommission(order, reference);
 
     return { found: true as const, alreadyProcessed: false as const, order: updated };
   } catch (err: any) {
@@ -84,6 +64,8 @@ export async function fulfillDataOrder(reference: string) {
       data: { fulfillmentStatus: "FAILED", failureReason: err.message },
       include: { bundle: true },
     });
+    // Order failed right after payment - reverse any commission we credited.
+    await clawbackAgentCommission(order, reference);
     await prisma.refund.create({
       data: {
         orderType: "data",
@@ -93,6 +75,62 @@ export async function fulfillDataOrder(reference: string) {
     });
     return { found: true as const, alreadyProcessed: false as const, order: updated };
   }
+}
+
+// Credit an agent's storefront commission to their wallet. Idempotent: only
+// credits when no commission transaction already exists for this reference.
+async function creditAgentCommission(
+  order: { referredByAgentId: string | null; agentCommission: number | null; bundle: { dataSizeGb: number; network: string } },
+  reference: string
+) {
+  if (!order.referredByAgentId || !order.agentCommission || order.agentCommission <= 0) return;
+  const already = await prisma.agentTransaction.findFirst({ where: { paystackReference: reference } });
+  if (already) return;
+  await prisma.$transaction([
+    prisma.agentProfile.update({
+      where: { id: order.referredByAgentId },
+      data: { walletBalance: { increment: order.agentCommission } },
+    }),
+    prisma.agentTransaction.create({
+      data: {
+        agentId: order.referredByAgentId,
+        type: "SALE",
+        amount: order.agentCommission,
+        description: `Storefront commission - ${order.bundle.dataSizeGb}GB ${order.bundle.network}`,
+        paystackReference: reference,
+      },
+    }),
+  ]);
+}
+
+// Reverse a previously credited commission when a paid order later fails/refunds.
+// Idempotent: only reverses a commission that was actually credited and not yet
+// reversed.
+async function clawbackAgentCommission(
+  order: { id: string; referredByAgentId: string | null; agentCommission: number | null },
+  reference: string
+) {
+  if (!order.referredByAgentId || !order.agentCommission || order.agentCommission <= 0) return;
+  const credit = await prisma.agentTransaction.findFirst({ where: { paystackReference: reference, type: "SALE" } });
+  if (!credit) return; // nothing was credited
+  const alreadyReversed = await prisma.agentTransaction.findFirst({
+    where: { agentId: order.referredByAgentId, description: `Commission reversed - order ${order.id}` },
+  });
+  if (alreadyReversed) return;
+  await prisma.$transaction([
+    prisma.agentProfile.update({
+      where: { id: order.referredByAgentId },
+      data: { walletBalance: { decrement: order.agentCommission } },
+    }),
+    prisma.agentTransaction.create({
+      data: {
+        agentId: order.referredByAgentId,
+        type: "SALE",
+        amount: -order.agentCommission,
+        description: `Commission reversed - order ${order.id}`,
+      },
+    }),
+  ]);
 }
 
 // Called once we have a confirmed final delivery outcome for a data order -
@@ -113,6 +151,7 @@ export async function resolveDataOrderDelivery(supplierOrderId: string, outcome:
   });
 
   if (outcome === "FAILED") {
+    await clawbackAgentCommission(order, order.paystackReference);
     await prisma.refund.create({
       data: {
         orderType: "data",

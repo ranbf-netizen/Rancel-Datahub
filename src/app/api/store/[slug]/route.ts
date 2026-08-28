@@ -9,8 +9,11 @@ function isValidGhanaNumber(value: string) {
   return /^0\d{9}$/.test(value.trim());
 }
 
-function markedUp(sellingPrice: number, markupPct: number) {
-  return Math.round(sellingPrice * (1 + markupPct / 100) * 100) / 100;
+// Storefront markup is fixed at 4.7% for all agents (not agent-configurable).
+const FIXED_STORE_MARKUP = 4.7;
+
+function markedUp(sellingPrice: number, _markupPct: number) {
+  return Math.round(sellingPrice * (1 + FIXED_STORE_MARKUP / 100) * 100) / 100;
 }
 
 // GET /api/store/[slug] — public storefront data: store name + bundles at the

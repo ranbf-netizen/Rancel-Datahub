@@ -15,7 +15,7 @@ type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerC
 type StoreOrder = { id: string; dataSizeGb: number; network: string; beneficiaryNumber: string; amount: number; commission: number; paymentStatus: string; fulfillmentStatus: string; createdAt: string };
 type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
 
-type ActivePanel = "sell" | "topup" | "withdraw" | "afa" | "store" | null;
+type ActivePanel = "prices" | "withdraw" | "afa" | "store" | null;
 
 export default function AgentDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -98,15 +98,13 @@ export default function AgentDashboard() {
 
       {/* Quick actions */}
       <div className="mt-6 flex flex-wrap gap-3">
-        <button onClick={() => setPanel(panel === "sell" ? null : "sell")} className="btn-primary">Sell Data</button>
+        <button onClick={() => setPanel(panel === "prices" ? null : "prices")} className="btn-primary">Price List</button>
         <button onClick={() => setPanel(panel === "afa" ? null : "afa")} className="btn-secondary">Create AFA Offer</button>
-        <button onClick={() => setPanel(panel === "topup" ? null : "topup")} className="btn-secondary">Add Money</button>
         <button onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")} className="btn-secondary">Withdraw</button>
         <button onClick={() => setPanel(panel === "store" ? null : "store")} className="btn-secondary">My Store</button>
       </div>
 
-      {panel === "sell" && <SellPanel bundles={bundles} discountPercent={profile!.discountPercent} onDone={() => { setPanel(null); load(); }} />}
-      {panel === "topup" && <TopupPanel onDone={() => setPanel(null)} />}
+      {panel === "prices" && <PriceListPanel bundles={bundles} />}
       {panel === "withdraw" && <WithdrawPanel balance={profile!.walletBalance} onDone={() => { setPanel(null); load(); }} />}
       {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
       {panel === "store" && <StorePanel />}
@@ -228,76 +226,45 @@ function StatCard({ label, value, highlight }: { label: string; value: string; h
   );
 }
 
-function SellPanel({ bundles, discountPercent, onDone }: { bundles: Bundle[]; discountPercent: number; onDone: () => void }) {
-  const [bundleId, setBundleId] = useState("");
-  const [beneficiary, setBeneficiary] = useState("");
-  const [customerPrice, setCustomerPrice] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const selected = bundles.find((b) => b.id === bundleId);
-  const resellerCost = selected ? Math.round(selected.costPrice * 1.024 * 100) / 100 : 0;
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    const res = await fetch("/api/agents/sell", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bundleId, beneficiaryNumber: beneficiary, customerPrice }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setError(data.error || "Sale failed."); return; }
-    onDone();
-  }
-
-  return (
-    <form onSubmit={submit} className="card mt-4 max-w-md space-y-3">
-      <p className="text-sm font-semibold">Sell Data</p>
-      <select value={bundleId} onChange={(e) => setBundleId(e.target.value)} className="field" required>
-        <option value="">Select bundle</option>
-        {bundles.map((b) => (
-          <option key={b.id} value={b.id}>{b.dataSizeGb}GB · {b.network.replace(/_/g, " ")}</option>
-        ))}
-      </select>
-      {selected && <p className="text-xs text-slate">Your reseller cost: GH₵ {resellerCost.toFixed(2)}</p>}
-      <input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value.replace(/[^\d]/g, ""))} placeholder="Recipient number" maxLength={10} className="field" required />
-      <input value={customerPrice} onChange={(e) => setCustomerPrice(e.target.value)} placeholder="Amount you charged your customer (GH₵)" type="number" step="0.01" className="field" required />
-      {error && <p className="text-sm text-ghRed">{error}</p>}
-      <button className="btn-primary w-full" disabled={loading}>{loading ? "Processing…" : "Confirm Sale"}</button>
-    </form>
+function PriceListPanel({ bundles }: { bundles: Bundle[] }) {
+  const NETWORK_LABELS: Record<string, string> = {
+    MTN: "MTN", TELECEL: "Telecel",
+    AIRTELTIGO_ISHARE: "AirtelTigo (iShare)", AIRTELTIGO_BIGTIME: "AirtelTigo (BigTime)",
+  };
+  const sorted = [...bundles].sort(
+    (a, b) => a.network.localeCompare(b.network) || a.dataSizeGb - b.dataSizeGb
   );
-}
-
-function TopupPanel({ onDone }: { onDone: () => void }) {
-  const [amount, setAmount] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    const res = await fetch("/api/agents/topup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (data.authorizationUrl) { window.location.href = data.authorizationUrl; return; }
-    setError(data.error || "Could not start payment.");
-  }
 
   return (
-    <form onSubmit={submit} className="card mt-4 max-w-md space-y-3">
-      <p className="text-sm font-semibold">Add Money</p>
-      <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount (GH₵)" type="number" step="0.01" className="field" required />
-      {error && <p className="text-sm text-ghRed">{error}</p>}
-      <button className="btn-primary w-full" disabled={loading}>{loading ? "Starting…" : "Continue to Payment"}</button>
-    </form>
+    <div className="card mt-4">
+      <p className="text-sm font-semibold">Your agent price list</p>
+      <p className="mt-1 text-xs text-slate">
+        As an approved agent, you enjoy a special rate of 2.4% below the standard price on every
+        data bundle. The prices below are your discounted agent prices.
+      </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[420px] text-sm">
+          <thead>
+            <tr className="border-b border-ink/10 text-left text-xs uppercase text-slate">
+              <th className="py-2">Network</th><th>Bundle</th><th>Validity</th><th className="text-right">Your price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((b) => (
+              <tr key={b.id} className="border-b border-ink/5">
+                <td className="py-2 whitespace-nowrap">{NETWORK_LABELS[b.network] || b.network}</td>
+                <td className="font-medium">{b.dataSizeGb}GB</td>
+                <td className="text-slate">{(b as any).validityDays ?? "—"} days</td>
+                <td className="text-right font-semibold text-primary">
+                  GH₵ {(Math.round(b.costPrice * 1.024 * 100) / 100).toFixed(2)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {sorted.length === 0 && <p className="mt-3 text-sm text-slate">No bundles available yet.</p>}
+      </div>
+    </div>
   );
 }
 
@@ -381,7 +348,6 @@ function AfaPanel({ price, onDone }: { price: number; onDone: () => void }) {
 
 function StorePanel() {
   const [slug, setSlug] = useState("");
-  const [markup, setMarkup] = useState("");
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -392,7 +358,6 @@ function StorePanel() {
       .then((r) => r.json())
       .then((d) => {
         if (d.storeSlug) { setSlug(d.storeSlug); setSavedSlug(d.storeSlug); }
-        if (typeof d.storeMarkup === "number") setMarkup(String(d.storeMarkup));
       })
       .catch(() => {});
   }, []);
@@ -403,7 +368,7 @@ function StorePanel() {
     const res = await fetch("/api/agents/store", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, markup: markup === "" ? undefined : Number(markup) }),
+      body: JSON.stringify({ slug }),
     });
     const d = await res.json();
     setLoading(false);
@@ -419,8 +384,8 @@ function StorePanel() {
     <form onSubmit={save} className="card mt-4 max-w-md">
       <p className="text-sm font-semibold">My Store</p>
       <p className="mt-1 text-xs text-slate">
-        Get a public link customers buy from. They pay the retail price plus your markup, and your
-        markup is added to your wallet as commission on each delivered order.
+        Get a public link customers buy from. You earn a fixed 4.7% commission on every delivered
+        order, added straight to your wallet.
       </p>
 
       <label className="label mt-4">Store name (your link)</label>
@@ -434,18 +399,9 @@ function StorePanel() {
         />
       </div>
 
-      <label className="label mt-4">Your markup (%)</label>
-      <input
-        className="field"
-        type="number"
-        min={0}
-        max={100}
-        step="0.01"
-        placeholder="e.g. 15"
-        value={markup}
-        onChange={(e) => setMarkup(e.target.value)}
-      />
-      <p className="mt-1 text-xs text-slate">Added on top of retail. This percentage is your commission per sale.</p>
+      <div className="mt-4 rounded-lg bg-mist p-3 text-xs text-ink/70">
+        Your commission rate: <span className="font-semibold text-ink">4.7%</span> on every sale through your store.
+      </div>
 
       {err && <p className="mt-3 text-sm text-ghRed">{err}</p>}
       {msg && <p className="mt-3 text-sm text-primary">{msg}</p>}
