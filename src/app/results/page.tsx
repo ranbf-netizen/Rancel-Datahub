@@ -39,8 +39,6 @@ export default function ResultsPage() {
 
       <a
         href={STORE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
         className="btn-primary mt-8 flex w-full items-center justify-center"
       >
         Continue to Buy / Check Results
@@ -59,7 +57,7 @@ export default function ResultsPage() {
 
       <p className="mt-6 text-center text-xs text-slate">
         Didn&rsquo;t get your checker after paying?{" "}
-        <a href={STORE_URL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+        <a href="https://ranceldatahub.checkerport.com/old-checkers" className="text-primary hover:underline">
           Retrieve it here
         </a>.
       </p>
