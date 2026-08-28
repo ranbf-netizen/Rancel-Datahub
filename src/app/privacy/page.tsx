@@ -5,7 +5,7 @@ export default function PrivacyPage() {
       <h1 className="mt-2 text-3xl font-bold">Privacy Policy</h1>
       <p className="mt-2 text-sm text-slate">Last updated: 1st September, 2026</p>
 
-      <      <p className="mt-4 rounded-xl border border-ink/10 bg-mist/50 p-4 text-sm text-ink/70">
+      <p className="mt-4 rounded-xl border border-ink/10 bg-mist/50 p-4 text-sm text-ink/70">
         Your privacy matters to us. This policy explains what information RanCel DataHub collects,
         how we use and protect it, and the rights you have over your data under Ghana&rsquo;s Data
         Protection Act, 2012.
