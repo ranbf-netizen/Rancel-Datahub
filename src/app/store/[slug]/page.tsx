@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
+import VerifyNumberWidget from "../../components/VerifyNumberWidget";
 
 type Bundle = {
   id: string;
@@ -132,6 +133,10 @@ export default function StorePage({ params }: { params: { slug: string } }) {
         Pick a network, pick a bundle, and pay securely — delivered straight to the number you enter.
         No account needed.
       </p>
+
+      <div className="mt-6 max-w-md">
+        <VerifyNumberWidget />
+      </div>
 
       {/* Network tabs */}
       <div className="mt-8 flex flex-wrap gap-2">
