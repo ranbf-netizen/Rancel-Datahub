@@ -16,6 +16,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Link href="/admin/pins" className="whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist">Results PINs</Link>
         <Link href="/admin/orders" className="whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist">Orders</Link>
         <Link href="/admin/agents" className="whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist">Agents</Link>
+        <Link href="/admin/withdrawals" className="whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist">Withdrawals</Link>
         <Link href="/admin/afa" className="whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist">AFA</Link>
         <Link href="/admin/announcements" className="whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist">Updates</Link>
       </aside>
