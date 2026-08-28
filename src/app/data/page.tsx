@@ -161,9 +161,9 @@ export default function DataPage() {
         no wallet needed.
       </p>
 
-      <div className="mt-6 max-w-md">
+            {/* <div className="mt-6 max-w-md">
         <VerifyNumberWidget />
-      </div>
+      </div> */}
 
       {/* Network tabs */}
       <div className="mt-8 flex flex-wrap gap-2">

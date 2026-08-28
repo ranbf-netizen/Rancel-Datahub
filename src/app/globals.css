@@ -53,11 +53,22 @@
   animation: sim-marquee 22s linear infinite;
 }
 
-/* Soft drifting blobs for the auth (login/register) background */
-@keyframes auth-blob {
-  0%   { transform: translate(0, 0) scale(1); }
-  33%  { transform: translate(30px, -20px) scale(1.1); }
-  66%  { transform: translate(-20px, 20px) scale(0.95); }
-  100% { transform: translate(0, 0) scale(1); }
+/* Lively floating bubbles + colour wash for the auth (login/register) pages */
+@keyframes auth-bubble {
+  0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translateY(-55vh) translateX(24px) scale(1.15); }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-105vh) translateX(-24px) scale(0.9); opacity: 0; }
 }
-.animate-auth-blob { animation: auth-blob 18s ease-in-out infinite; }
+.animate-auth-bubble { animation-name: auth-bubble; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+
+@keyframes auth-gradient {
+  0%   { background: radial-gradient(circle at 20% 30%, rgba(37,99,235,0.18), transparent 55%),
+                     radial-gradient(circle at 80% 70%, rgba(255,204,0,0.16), transparent 55%); }
+  50%  { background: radial-gradient(circle at 70% 25%, rgba(220,38,38,0.14), transparent 55%),
+                     radial-gradient(circle at 25% 75%, rgba(37,99,235,0.18), transparent 55%); }
+  100% { background: radial-gradient(circle at 20% 30%, rgba(37,99,235,0.18), transparent 55%),
+                     radial-gradient(circle at 80% 70%, rgba(255,204,0,0.16), transparent 55%); }
+}
+.animate-auth-gradient { animation: auth-gradient 16s ease-in-out infinite; }
