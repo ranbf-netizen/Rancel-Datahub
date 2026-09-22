@@ -132,7 +132,7 @@ export default function HomePage() {
               { quote: "What I like most is the convenience. I can access digital services anytime without stress.", name: "Abena Asante", location: "Cape Coast" },
             ]}
           />
-          <p className="mt-4 text-center text-xs text-slate">Sample testimonials shown — replace with real customer feedback.</p>
+        
         </section>
       </ScrollFade>
 
