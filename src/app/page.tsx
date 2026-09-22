@@ -126,10 +126,10 @@ export default function HomePage() {
           {/* TODO: replace the placeholder quotes/names below with real testimonials; add photoUrl for real photos */}
           <TestimonialSlider
             items={[
-              { quote: "[Placeholder — replace with a real customer quote about fast data delivery.]", name: "Customer Name", location: "Accra" },
-              { quote: "[Placeholder — replace with a real customer quote about the AI tools or results checker.]", name: "Customer Name", location: "Kumasi" },
-              { quote: "[Placeholder — replace with a real agent quote about earning with the store link.]", name: "Agent Name", location: "Takoradi" },
-              { quote: "[Placeholder — add as many testimonials as you like; they scroll horizontally.]", name: "Customer Name", location: "Tamale" },
+                            { quote: "Fast and reliable service. My data bundle was delivered within minutes and the process was very smooth.", name: "Kwame Mensah", location: "Accra" },
+              { quote: "I use Rancel DataHub regularly for data purchases. The platform is simple, affordable, and easy to use.", name: "Ama Serwaa", location: "Kumasi" },
+              { quote: "The results checker purchase was quick and hassle-free. I received my voucher instantly after payment.", name: "Daniel Owusu", location: "Takoradi" },
+              { quote: "What I like most is the convenience. I can access digital services anytime without stress.", name: "Abena Asante", location: "Cape Coast" },
             ]}
           />
           <p className="mt-4 text-center text-xs text-slate">Sample testimonials shown — replace with real customer feedback.</p>
