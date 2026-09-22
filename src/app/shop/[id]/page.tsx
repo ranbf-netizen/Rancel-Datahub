@@ -16,7 +16,7 @@ type Product = {
 type Related = { id: string; title: string; price: number; coverUrl?: string; platform?: string; productType: string };
 
 const FAQS = [
-  { q: "How is this product delivered?", a: "After your payment is confirmed, you receive your product on the confirmation page — instantly for instant-delivery items, or as described in the instructions." },
+  { q: "How is this product delivered?", a: "Delivery depends on the product. Instant-delivery items are provided after payment confirmation, while manually fulfilled orders are processed by our team." },
   { q: "What information do I need to provide?", a: "Just a valid email address for your order and updates. Provide only the information requested in the order form." },
   { q: "How do I track my order?", a: "Keep your payment reference from checkout — you can use it to track your order status." },
   { q: "When does fulfilment start?", a: "Fulfilment begins as soon as your payment is verified by our system." },
@@ -89,11 +89,12 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   }
 
   function receiveLabel(p: Product) {
-    if (p.productType === "BOOSTING") return "Manual fulfilment";
-    if (p.deliveryType === "LINK") return "Access link";
-    if (p.deliveryType === "REVEAL") return "Instant details";
-    return "Download";
-  }
+  if (p.productType === "BOOSTING") return "Manual fulfilment";
+  if (p.deliveryType === "MANUAL") return "Manual fulfilment";
+  if (p.deliveryType === "LINK") return "Access link";
+  if (p.deliveryType === "REVEAL") return "Instant details";
+  return "Download";
+}
 
   if (notFound) {
     return (
