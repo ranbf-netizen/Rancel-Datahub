@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-body;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-white shadow-[0_4px_14px_-4px_rgba(37,99,235,0.45)] transition hover:bg-[#1d4ed8] hover:shadow-[0_6px_20px_-4px_rgba(37,99,235,0.5)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-ink/10 bg-white px-6 py-3 text-sm font-semibold text-ink shadow-[0_1px_2px_rgba(11,14,20,0.04)] transition hover:border-ink/15 hover:bg-mist focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+  }
+  .btn-ghost-light {
+    @apply inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20;
+  }
+  .card {
+    @apply rounded-2xl border border-ink/[0.06] bg-white p-6 shadow-[0_1px_3px_rgba(11,14,20,0.04),0_8px_24px_-12px_rgba(11,14,20,0.10)];
+  }
+  .field {
+    @apply w-full rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm text-ink placeholder:text-slate/60 transition focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate;
+  }
+  .chip {
+    @apply rounded-full border border-ink/10 bg-white px-4 py-2 text-sm font-medium text-slate shadow-[0_1px_2px_rgba(11,14,20,0.03)] transition hover:border-ink/20;
+  }
+  .chip-active {
+    @apply border-transparent bg-ink text-white shadow-[0_2px_8px_-2px_rgba(15,23,42,0.4)];
+  }
+  .badge-popular {
+    @apply rounded-full bg-mtn/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#8A6D00];
+  }
+  .badge-value {
+    @apply rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary;
+  }
+}
+
+/* Continuous horizontal marquee for the unsupported-SIM notice */
+@keyframes sim-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-sim-marquee {
+  animation: sim-marquee 22s linear infinite;
+}
+.sim-marquee-track {
+  animation: sim-marquee 22s linear infinite;
+}
+.sim-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Soft drifting blobs for the auth (login/register) background */
+@keyframes auth-blob {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(30px, -20px) scale(1.1); }
+  66%  { transform: translate(-20px, 20px) scale(0.95); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+.animate-auth-blob { animation: auth-blob 18s ease-in-out infinite; }
+
+/* ---- Light polish: subtle, performance-friendly animations ---------------- */
+/* Fade + rise in, used on page sections. Respects reduced-motion. */
+@keyframes fade-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-rise { animation: fade-rise 0.5s ease-out both; }
+
+/* Staggered delays so grouped items reveal in sequence */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.12s; }
+.stagger-3 { animation-delay: 0.19s; }
+.stagger-4 { animation-delay: 0.26s; }
+.stagger-5 { animation-delay: 0.33s; }
+
+/* Gentle hover lift for cards/links */
+.hover-lift { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+.hover-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 25px -12px rgba(0,0,0,0.18); }
+
+/* Turn off all of the above for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-rise, .animate-auth-bubble, .animate-auth-gradient, .animate-sim-marquee, .sim-marquee-track { animation: none !important; }
+  .hover-lift:hover { transform: none; }
+}
