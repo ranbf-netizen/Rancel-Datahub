@@ -3,14 +3,15 @@ export default function PrivacyPage() {
     <div className="mx-auto max-w-2xl px-5 py-16">
       <p className="text-xs font-semibold uppercase tracking-widest text-primary">Legal</p>
       <h1 className="mt-2 text-3xl font-bold">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-slate">Last updated: [DATE]</p>
+      <p className="mt-2 text-sm text-slate">Last updated: September 22, 2026.</p>
 
       <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-ink/70">
-        This policy is a starting template, not legal advice. Have it reviewed by a lawyer
-        familiar with Ghana&rsquo;s Data Protection Act, 2012 before relying on it with real
-        customers, and confirm whether you must register as a data controller with the Data
-        Protection Commission.
-      </p>
+  This Privacy Policy explains how Rancel DataHub collects, uses, stores, and protects
+  your personal information when you use our website and services. By using Rancel
+  DataHub, you acknowledge and agree to the practices described in this policy. We
+  handle personal information in accordance with applicable data protection laws of
+  Ghana, including the Data Protection Act, 2012 (Act 843).
+</p>
 
       <div className="mt-6 space-y-6 text-sm text-slate">
         <section>
