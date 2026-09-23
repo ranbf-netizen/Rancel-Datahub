@@ -1,3 +1,4 @@
+```tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -40,6 +41,7 @@ const EMPTY = {
   fileUrl: "",
   revealContent: "",
   gmailLabel: "",
+  gmailAddress: "",
   gmailRevealSeconds: 60,
 
   // boosting
@@ -500,37 +502,87 @@ export default function AdminDigitalProducts() {
                 required
               />
             ) : form.deliveryType === "GMAIL_LATEST" ? (
-              <div className="space-y-2">
-                <p className="text-xs text-slate">
-                  Shows the buyer the latest email under a
-                  Gmail label for a timed window, then hides it.
-                  Requires Gmail to be configured
-                  (GMAIL_CLIENT_ID etc. in your environment) —
-                  see README.
-                </p>
+              <div className="space-y-3 rounded-lg bg-mist p-3">
+                <div>
+                  <p className="text-sm font-medium text-ink">
+                    Gmail auto-delivery settings
+                  </p>
 
-                <input
-                  className="field"
-                  placeholder="Gmail label to pull from (e.g. to-share) — recommended"
-                  value={form.gmailLabel || ""}
-                  onChange={(e) =>
-                    set("gmailLabel", e.target.value)
-                  }
-                />
+                  <p className="mt-1 text-xs text-slate">
+                    After payment, the customer will be shown
+                    this Gmail address and asked to request
+                    their sign-in code. The system will then
+                    check for a newly received code.
+                  </p>
+                </div>
 
-                <input
-                  className="field"
-                  type="number"
-                  min={5}
-                  placeholder="Seconds visible (default 60)"
-                  value={form.gmailRevealSeconds || ""}
-                  onChange={(e) =>
-                    set(
-                      "gmailRevealSeconds",
-                      e.target.value
-                    )
-                  }
-                />
+                <div>
+                  <label className="label">
+                    Customer Gmail address
+                  </label>
+
+                  <input
+                    className="field"
+                    type="email"
+                    placeholder="example@gmail.com"
+                    value={form.gmailAddress}
+                    onChange={(e) =>
+                      set("gmailAddress", e.target.value)
+                    }
+                    required
+                  />
+
+                  <p className="mt-1 text-[11px] text-slate">
+                    This is the Gmail address the customer
+                    should use when requesting the sign-in
+                    code.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="label">
+                    Gmail label
+                  </label>
+
+                  <input
+                    className="field"
+                    placeholder="Gmail label (e.g. to-share)"
+                    value={form.gmailLabel}
+                    onChange={(e) =>
+                      set("gmailLabel", e.target.value)
+                    }
+                  />
+
+                  <p className="mt-1 text-[11px] text-slate">
+                    Leave blank to check the normal Gmail
+                    inbox.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="label">
+                    Seconds visible
+                  </label>
+
+                  <input
+                    className="field"
+                    type="number"
+                    min={5}
+                    placeholder="60"
+                    value={form.gmailRevealSeconds}
+                    onChange={(e) =>
+                      set(
+                        "gmailRevealSeconds",
+                        e.target.value
+                      )
+                    }
+                  />
+
+                  <p className="mt-1 text-[11px] text-slate">
+                    How long the detected code remains visible
+                    to the customer.
+                  </p>
+                </div>
               </div>
             ) : form.deliveryType === "MANUAL" ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -876,7 +928,6 @@ function OptionsEditor({
 
   const [options, setOptions] = useState<Option[]>([]);
 
-  // Load options from the parent JSON value.
   useEffect(() => {
     try {
       const parsed = value ? JSON.parse(value) : [];
@@ -921,9 +972,6 @@ function OptionsEditor({
   }
 
   function addPackage() {
-    // IMPORTANT:
-    // Do NOT filter this new empty row.
-    // It needs to exist so the input fields appear.
     const next = [
       ...options,
       {
@@ -933,8 +981,6 @@ function OptionsEditor({
     ];
 
     setOptions(next);
-
-    // Keep the empty row in the JSON temporarily.
     onChange(JSON.stringify(next));
   }
 
@@ -1017,3 +1063,23 @@ function OptionsEditor({
     </div>
   );
 }
+```
+
+### What I changed
+
+* Added `gmailAddress: ""` to `EMPTY`.
+* Added a proper **Customer Gmail address** field.
+* Made it `type="email"`.
+* Made it required when `GMAIL_LATEST` is selected.
+* Kept the Gmail label field.
+* Kept the reveal duration.
+* Improved the Gmail settings section so the purpose of each field is clear.
+* The existing `JSON.stringify(form)` automatically sends `gmailAddress` to the API we just fixed.
+
+After replacing the file, run:
+
+```bash
+npm run build
+```
+
+If that passes, we can test creating one **GMAIL_LATEST** product and verify that the Gmail address actually appears on the customer delivery page.

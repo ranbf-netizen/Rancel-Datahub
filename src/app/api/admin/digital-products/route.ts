@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
       deliveryType,
       revealContent,
       gmailLabel,
-      gmailRevealSeconds,
+gmailAddress,
+gmailRevealSeconds,
       productType,
       stock,
       platform,
@@ -228,11 +229,16 @@ export async function POST(req: NextRequest) {
             : null,
 
         gmailLabel:
-          pType === "DIGITAL" && deliveryType === "GMAIL_LATEST"
-            ? gmailLabel || null
-            : null,
+  pType === "DIGITAL" && deliveryType === "GMAIL_LATEST"
+    ? gmailLabel || null
+    : null,
 
-        gmailRevealSeconds:
+gmailAddress:
+  pType === "DIGITAL" && deliveryType === "GMAIL_LATEST"
+    ? gmailAddress?.trim() || null
+    : null,
+
+gmailRevealSeconds:
           pType === "DIGITAL" &&
           deliveryType === "GMAIL_LATEST" &&
           gmailRevealSeconds
@@ -310,9 +316,10 @@ export async function PATCH(req: NextRequest) {
       "quantity",
       "deliveryEstimate",
       "requirements",
-      "revealContent",
-      "gmailLabel",
-      "deliveryMethods",
+"revealContent",
+"gmailLabel",
+"gmailAddress",
+"deliveryMethods",
     ];
 
     stringFields.forEach((key) => {
