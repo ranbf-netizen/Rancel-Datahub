@@ -237,7 +237,8 @@ model DigitalPurchase {
   smmStatus         String?
   socialLink        String?
   revealStartedAt   DateTime?
-  revealedGmailText String?
+revealedGmailText String?
+confirmedAt       DateTime?
   chosenOption      String?
   deliveryMethod    String?
   whatsapp          String?
