@@ -16,7 +16,7 @@ type Product = {
 type Related = { id: string; title: string; price: number; coverUrl?: string; platform?: string; productType: string };
 
 const FAQS = [
-  { q: "How is this product delivered?", a: "Delivery depends on the product. Instant-delivery items are provided after payment confirmation, while manually fulfilled orders are processed by our team." },
+  { q: "How is this product delivered?", a: "After your payment is confirmed, you receive your product on the confirmation page — instantly for instant-delivery items, or as described in the instructions." },
   { q: "What information do I need to provide?", a: "Just a valid email address for your order and updates. Provide only the information requested in the order form." },
   { q: "How do I track my order?", a: "Keep your payment reference from checkout — you can use it to track your order status." },
   { q: "When does fulfilment start?", a: "Fulfilment begins as soon as your payment is verified by our system." },
@@ -89,13 +89,40 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   }
 
   function receiveLabel(p: Product) {
-  if (p.productType === "BOOSTING") return "Manual fulfilment";
-  if (p.deliveryType === "MANUAL") return "Manual fulfilment";
-  if (p.deliveryType === "LINK") return "Access link";
-  if (p.deliveryType === "REVEAL") return "Instant details";
-  if (p.deliveryType === "GMAIL_LATEST") return "Auto Delivered";
-  return "Download";
-}
+    if (p.productType === "BOOSTING") return "Manual fulfilment";
+
+    if (
+      p.deliveryType === "MANUAL" ||
+      p.deliveryType === "MANUAL_FULFILMENT" ||
+      p.deliveryType === "MANUAL_FULFILLMENT"
+    ) {
+      return "Manual fulfilment";
+    }
+
+    if (p.deliveryType === "GMAIL_LATEST") return "Auto Delivered";
+    if (p.deliveryType === "LINK") return "Access link";
+    if (p.deliveryType === "REVEAL") return "Instant details";
+
+    return "Download";
+  }
+
+  function deliveryMethodLabel(method: string) {
+    if (method === "ACTIVATION") return "Activation";
+    if (method === "GMAIL_LATEST") return "Auto Delivered";
+
+    if (
+      method === "MANUAL" ||
+      method === "MANUAL_FULFILMENT" ||
+      method === "MANUAL_FULFILLMENT"
+    ) {
+      return "Manual fulfilment";
+    }
+
+    if (method === "LINK") return "Access link";
+    if (method === "REVEAL") return "Instant details";
+
+    return "Digital delivery";
+  }
 
   if (notFound) {
     return (
@@ -106,6 +133,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     );
   }
   if (!product) {
+    console.log(product);
     return <div className="mx-auto max-w-md px-5 py-20 text-center text-slate"><Loader2 className="mx-auto animate-spin" /> Loading…</div>;
   }
 
@@ -175,7 +203,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                     onClick={() => setDeliveryMethod(m)}
                     className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition ${deliveryMethod === m ? "border-primary bg-primary/5 text-primary" : "border-ink/10 hover:border-primary/30"}`}
                   >
-                    {m === "ACTIVATION" ? "Activation" : "Digital delivery"}
+                    {deliveryMethodLabel(m)}
                   </button>
                 ))}
               </div>
@@ -286,9 +314,9 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
             <h2 className="text-xl font-bold">Related products</h2>
             <Link href="/shop" className="text-sm text-primary hover:underline">View store</Link>
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 flex gap-4 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {related.map((r) => (
-              <Link key={r.id} href={`/shop/${r.id}`} className="card hover-lift">
+              <Link key={r.id} href={`/shop/${r.id}`} className="card hover-lift w-[60%] shrink-0 sm:w-[38%] lg:w-[23%]">
                 <div className="aspect-square w-full overflow-hidden rounded-lg bg-mist">
                   {r.coverUrl ? <img src={r.coverUrl} alt={r.title} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-slate">No image</div>}
                 </div>

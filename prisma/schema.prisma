@@ -46,6 +46,7 @@ model User {
   afaOrders  AfaOrder[]
   agentProfile AgentProfile?
   boostOrders BoostOrder[]
+  smsOrders  SmsOrder[]
 }
 
 // Manually entered by admin (Cledanet has no catalog/packages endpoint to sync
@@ -262,8 +263,9 @@ model DigitalProduct {
   deliveryType String  @default("DOWNLOAD") // DOWNLOAD (a file) | LINK (access link) | REVEAL (text/code shown after payment) | GMAIL_LATEST (latest Gmail email, shown for a timed window)
   fileUrl     String   @default("") // file URL to download, access link to open, or unused for REVEAL/BOOSTING/GMAIL_LATEST
   revealContent String? // REVEAL type only: the text/code shown to the buyer after payment
-  gmailLabel  String?  // GMAIL_LATEST type only: only the latest email under this Gmail label is ever revealed (recommended, keeps you in control of what's shown)
-  gmailRevealSeconds Int @default(60) // GMAIL_LATEST type only: how long the email stays visible once revealed
+  gmailLabel         String?  // GMAIL_LATEST only: Gmail label used to identify the relevant email
+gmailAddress       String?  // GMAIL_LATEST only: Gmail address customers should use to request the sign-in code
+gmailRevealSeconds Int      @default(60) // GMAIL_LATEST only: how long the email stays visible once revealed
   coverUrl    String?
   active      Boolean  @default(true)
   featured    Boolean  @default(false) // shows in the "Top picks" row
@@ -315,6 +317,9 @@ model DigitalPurchase {
   // nothing back even though the row still exists.
   revealStartedAt   DateTime?
   revealedGmailText String?
+  confirmedAt       DateTime? // GMAIL_LATEST only: set the moment the buyer ticks "I've requested my code" -
+                              // only an email that arrives AFTER this timestamp is ever shown, so a stale/old
+                              // message already sitting in the label can never be handed to the wrong buyer.
 }
 
 // Records a credit top-up (₵5 → 10 credits) paid via Paystack. Credits are
@@ -366,5 +371,28 @@ model BoostOrder {
   paymentStatus     PaymentStatus @default(PENDING)
   panelOrderId      String?  // panel order id once placed
   panelStatus       String?  // In progress | Partial | Completed | ...
+  createdAt         DateTime @default(now())
+}
+
+// A customer's SMS-number rental (pay via Paystack, then a number is rented
+// from SMSPool and the incoming verification code is polled for and shown,
+// live, with a countdown until the number's rental window expires).
+model SmsOrder {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  countryId         String   // SMSPool country ID
+  countryName       String
+  serviceId         String   // SMSPool service ID
+  serviceName       String
+  amount            Float    // GHS charged to the customer
+  paystackReference String   @unique
+  paymentStatus     PaymentStatus @default(PENDING)
+  poolOrderId       String?  // SMSPool's order_id, once rented
+  phoneNumber       String?  // the rented number
+  smsCode           String?  // the verification code, once received
+  fullSms           String?  // full message text, once received
+  status            String   @default("PENDING") // PENDING | WAITING | RECEIVED | EXPIRED | FAILED | CANCELLED
+  expiresAt         DateTime? // when the rental window closes
   createdAt         DateTime @default(now())
 }
