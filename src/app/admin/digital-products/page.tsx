@@ -1063,23 +1063,3 @@ function OptionsEditor({
     </div>
   );
 }
-
-
-### What I changed
-
-* Added `gmailAddress: ""` to `EMPTY`.
-* Added a proper **Customer Gmail address** field.
-* Made it `type="email"`.
-* Made it required when `GMAIL_LATEST` is selected.
-* Kept the Gmail label field.
-* Kept the reveal duration.
-* Improved the Gmail settings section so the purpose of each field is clear.
-* The existing `JSON.stringify(form)` automatically sends `gmailAddress` to the API we just fixed.
-
-After replacing the file, run:
-
-```bash
-npm run build
-```
-
-If that passes, we can test creating one **GMAIL_LATEST** product and verify that the Gmail address actually appears on the customer delivery page.
