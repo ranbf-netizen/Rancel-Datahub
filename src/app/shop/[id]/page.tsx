@@ -181,133 +181,434 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
             </>
           )}
 
-          {/* Options / packages */}
-          {options.length > 0 && (
-            <>
-              <label className="label mt-4">Choose a package</label>
-              <select className="field" value={chosenOption} onChange={(e) => setChosenOption(e.target.value)}>
-                {options.map((o) => (
-                  <option key={o.name} value={o.name}>{o.name} — GH₵ {o.price.toFixed(2)}</option>
-                ))}
-              </select>
-            </>
-          )}
+       "use client";
 
-          {product.requireWhatsapp && (
-            <>
-              <label className="label mt-4">WhatsApp number (required)</label>
-              <input className="field" placeholder="024 XXX XXXX" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
-              <p className="mt-1 text-xs text-slate">We&rsquo;ll contact you here to complete your order.</p>
-            </>
-          )}
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-          <label className="label mt-4">Email address (required for payment)</label>
-          <input className="field" type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+type Option = {
+  id?: string;
+  name: string;
+  price: number;
+  stock?: number | null;
+};
 
-          <label className="label mt-4">Note (optional)</label>
-          <textarea className="field" rows={2} placeholder="Any final instruction for us." value={note} onChange={(e) => setNote(e.target.value)} />
+type Product = {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  imageUrl?: string | null;
+  productType?: string | null;
+  deliveryType?: string | null;
+  options?: Option[];
+};
 
-          {error && <p className="mt-3 text-sm text-ghRed">{error}</p>}
+function receiveLabel(p: Product) {
+  if (p.productType === "BOOSTING") return "Manual fulfilment";
+  if (p.deliveryType === "MANUAL") return "Manual fulfilment";
+  if (p.deliveryType === "LINK") return "Access link";
+  if (p.deliveryType === "REVEAL") return "Instant details";
+  if (p.deliveryType === "GMAIL_LATEST") return "Auto Delivered";
 
-          <button onClick={buy} disabled={buying || product.outOfStock} className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 disabled:opacity-50">
-            {buying && <Loader2 size={16} className="animate-spin" />}
-            {product.outOfStock ? "Out of stock" : buying ? "Starting payment…" : `Continue to payment — GH₵ ${effectivePrice.toFixed(2)}`}
-          </button>
+  return "Download";
+}
 
-          {/* Order on WhatsApp — for customers who prefer to order directly */}
-          {!product.outOfStock && (
-            <a
-              href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hi, I want to order: ${product.title} (GH₵ ${product.price.toFixed(2)})${note ? `\nNote: ${note}` : ""}`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex w-full items-center gap-3 rounded-xl border border-ink/10 px-4 py-3 text-left transition hover:bg-mist"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#25D366] text-white">
-                <MessageCircle size={18} />
-              </span>
-              <span>
-                <span className="block text-sm font-semibold text-ink">Order on WhatsApp</span>
-                <span className="block text-xs text-slate">Your order details will be ready to send in WhatsApp.</span>
-              </span>
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* Info tabs */}
-      <div className="card mt-8">
-        <p className="text-xs font-semibold uppercase tracking-widest text-primary">Product information</p>
-        <h2 className="mt-1 text-xl font-bold">Everything you need before you order</h2>
-        <div className="mt-4 flex flex-wrap gap-2 border-b border-ink/10 pb-3">
-          {([["about", "About"], ["how", "How it works"], ["req", "Requirements"]] as const).map(([k, label]) => (
-            <button key={k} onClick={() => setTab(k)} className={`chip ${tab === k ? "chip-active" : ""}`}>{label}</button>
-          ))}
-        </div>
-        <div className="mt-4 text-sm text-ink/80">
-          {tab === "about" && <p>{product.description || `About ${product.title}. Choose the option above and complete checkout using the details requested for your order.`}</p>}
-          {tab === "how" && (
-            <ol className="list-decimal space-y-2 pl-5">
-              <li>Choose the product you want and complete payment.</li>
-              <li>Provide only the information requested in the order form.</li>
-              <li>After payment is confirmed, follow the delivery instructions for your order.</li>
-            </ol>
-          )}
-          {tab === "req" && (
-            <ul className="space-y-2">
-              {(product.requirements ? product.requirements.split("\n") : ["Provide a valid email address.", "Provide only the information requested in the order form.", "Keep your order reference so you can track delivery status."]).map((r, i) => (
-                <li key={i} className="flex items-start gap-2"><Check size={15} className="mt-0.5 shrink-0 text-primary" /> {r}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* FAQ */}
-      <div className="mt-8">
-        <p className="text-xs font-semibold uppercase tracking-widest text-primary">Questions customers ask</p>
-        <h2 className="mt-1 text-xl font-bold">Frequently asked questions</h2>
-        <div className="mt-4 space-y-2">
-          {FAQS.map((f, i) => (
-            <div key={i} className="card !p-0">
-              <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium">
-                {f.q} <ChevronDown size={16} className={`transition ${openFaq === i ? "rotate-180" : ""}`} />
-              </button>
-              {openFaq === i && <p className="px-4 pb-4 text-sm text-slate">{f.a}</p>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Related */}
-      {related.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">Related products</h2>
-            <Link href="/shop" className="text-sm text-primary hover:underline">View store</Link>
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {related.map((r) => (
-              <Link key={r.id} href={`/shop/${r.id}`} className="card hover-lift">
-                <div className="aspect-square w-full overflow-hidden rounded-lg bg-mist">
-                  {r.coverUrl ? <img src={r.coverUrl} alt={r.title} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-slate">No image</div>}
-                </div>
-                <p className="mt-2 font-semibold text-ink">{r.title}</p>
-                <p className="mt-0.5 font-bold text-primary">GH₵ {r.price.toFixed(2)}</p>
-                <span className="mt-1 block text-sm text-primary">View product →</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+function Row({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-gray-100 py-3 last:border-b-0">
+      <span className="text-sm text-gray-500">{label}</span>
+      <span className="text-right text-sm font-medium text-gray-900">
+        {value}
+      </span>
     </div>
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+export default function ProductDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const router = useRouter();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [buying, setBuying] = useState(false);
+  const [error, setError] = useState("");
+
+  const [selectedOption, setSelectedOption] = useState<Option | null>(null);
+  const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => {
+    async function loadProduct() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await fetch(`/api/digital-products/${params.id}`, {
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load product");
+        }
+
+        const data = await res.json();
+
+        const loadedProduct: Product = data.product ?? data;
+
+        setProduct(loadedProduct);
+
+        if (loadedProduct.options && loadedProduct.options.length > 0) {
+          setSelectedOption(loadedProduct.options[0]);
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Unable to load this product.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProduct();
+  }, [params.id]);
+
+  const currentPrice = useMemo(() => {
+    if (selectedOption) {
+      return Number(selectedOption.price || 0);
+    }
+
+    return Number(product?.price || 0);
+  }, [product, selectedOption]);
+
+  const currentStock = useMemo(() => {
+    if (selectedOption?.stock !== undefined) {
+      return selectedOption.stock;
+    }
+
+    return null;
+  }, [selectedOption]);
+
+  const totalPrice = currentPrice * quantity;
+
+  async function handleBuy() {
+    if (!product) return;
+
+    try {
+      setBuying(true);
+      setError("");
+
+      const res = await fetch("/api/digital-products/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          productId: product.id,
+          quantity,
+          optionId: selectedOption?.id ?? null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Unable to continue with checkout.");
+      }
+
+      if (data?.authorization_url) {
+        window.location.href = data.authorization_url;
+        return;
+      }
+
+      if (data?.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      router.push(
+        `/shop/checkout?product=${encodeURIComponent(product.id)}${
+          selectedOption?.id
+            ? `&option=${encodeURIComponent(selectedOption.id)}`
+            : ""
+        }&quantity=${quantity}`
+      );
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setBuying(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+          <div className="animate-pulse">
+            <div className="mb-8 h-8 w-48 rounded bg-gray-200" />
+
+            <div className="grid gap-8 lg:grid-cols-2">
+              <div className="h-[420px] rounded-2xl bg-gray-200" />
+
+              <div className="space-y-4">
+                <div className="h-10 w-3/4 rounded bg-gray-200" />
+                <div className="h-6 w-1/3 rounded bg-gray-200" />
+                <div className="h-32 rounded bg-gray-200" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-white px-4">
+        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-xl font-semibold text-gray-900">
+            Product unavailable
+          </h1>
+
+          <p className="mt-2 text-sm text-gray-500">
+            {error || "This product could not be found."}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => router.push("/shop")}
+            className="mt-6 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            Back to Shop
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between px-4 py-2.5">
-      <span className="text-slate">{label}</span>
-      <span className={strong ? "font-bold text-ink" : "font-medium text-ink"}>{value}</span>
-    </div>
+    <main className="min-h-screen bg-gray-50">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <button
+          type="button"
+          onClick={() => router.push("/shop")}
+          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-gray-900"
+        >
+          ← Back to Shop
+        </button>
+
+        <div className="grid gap-8 lg:grid-cols-2">
+          {/* Product Image */}
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex min-h-[380px] items-center justify-center bg-gray-100">
+              {product.imageUrl ? (
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  className="h-full max-h-[500px] w-full object-contain"
+                />
+              ) : (
+                <div className="flex h-[380px] w-full items-center justify-center text-sm text-gray-400">
+                  No image available
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Product Information */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+                {product.name}
+              </h1>
+
+              <div className="mt-3 flex items-center gap-3">
+                <span className="text-2xl font-bold text-blue-600">
+                  GH₵{currentPrice.toFixed(2)}
+                </span>
+
+                {currentStock !== null && (
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      currentStock > 0
+                        ? "bg-green-50 text-green-700"
+                        : "bg-red-50 text-red-700"
+                    }`}
+                  >
+                    {currentStock > 0
+                      ? `${currentStock} in stock`
+                      : "Out of stock"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Description */}
+            {product.description && (
+              <div className="mb-6">
+                <h2 className="mb-2 text-sm font-semibold text-gray-900">
+                  Description
+                </h2>
+
+                <div className="whitespace-pre-line text-sm leading-6 text-gray-600">
+                  {product.description}
+                </div>
+              </div>
+            )}
+
+            {/* Options */}
+            {product.options && product.options.length > 0 && (
+              <div className="mb-6">
+                <h2 className="mb-3 text-sm font-semibold text-gray-900">
+                  Select an option
+                </h2>
+
+                <div className="grid gap-3">
+                  {product.options.map((option, index) => {
+                    const isSelected =
+                      selectedOption?.id === option.id ||
+                      (!selectedOption?.id &&
+                        selectedOption?.name === option.name);
+
+                    const optionStock = option.stock;
+
+                    return (
+                      <button
+                        key={option.id ?? `${option.name}-${index}`}
+                        type="button"
+                        onClick={() => setSelectedOption(option)}
+                        className={`flex items-center justify-between rounded-xl border p-4 text-left transition ${
+                          isSelected
+                            ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600"
+                            : "border-gray-200 bg-white hover:border-blue-300"
+                        }`}
+                      >
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {option.name}
+                          </p>
+
+                          {optionStock !== undefined &&
+                            optionStock !== null && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                {optionStock > 0
+                                  ? `${optionStock} available`
+                                  : "Out of stock"}
+                              </p>
+                            )}
+                        </div>
+
+                        <span className="font-semibold text-blue-600">
+                          GH₵{Number(option.price).toFixed(2)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Quantity */}
+            <div className="mb-6">
+              <h2 className="mb-3 text-sm font-semibold text-gray-900">
+                Quantity
+              </h2>
+
+              <div className="flex w-fit items-center overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantity((value) => Math.max(1, value - 1))
+                  }
+                  className="px-4 py-3 text-lg text-gray-600 transition hover:bg-gray-50"
+                >
+                  −
+                </button>
+
+                <span className="min-w-[50px] border-x border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-900">
+                  {quantity}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setQuantity((value) => value + 1)}
+                  className="px-4 py-3 text-lg text-gray-600 transition hover:bg-gray-50"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Delivery Information */}
+            <div className="mb-6 rounded-xl border border-gray-100 bg-gray-50 px-4">
+              <Row
+                label="How you'll receive it"
+                value={receiveLabel(product)}
+              />
+
+              <Row
+                label="Product type"
+                value={
+                  product.productType === "BOOSTING"
+                    ? "Social Media Boosting"
+                    : product.productType || "Digital Product"
+                }
+              />
+
+              <Row
+                label="Total"
+                value={`GH₵${totalPrice.toFixed(2)}`}
+              />
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {/* Buy Button */}
+            <button
+              type="button"
+              onClick={handleBuy}
+              disabled={
+                buying ||
+                (currentStock !== null && currentStock <= 0)
+              }
+              className="w-full rounded-xl bg-blue-600 px-5 py-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {buying
+                ? "Processing..."
+                : currentStock !== null && currentStock <= 0
+                ? "Out of Stock"
+                : `Buy Now — GH₵${totalPrice.toFixed(2)}`}
+            </button>
+
+            <p className="mt-3 text-center text-xs text-gray-400">
+              Secure checkout. Your order will be processed after payment.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
