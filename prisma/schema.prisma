@@ -7,6 +7,288 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  phone        String        @unique
+  passwordHash String
+  role         Role          @default(CUSTOMER)
+  createdAt    DateTime      @default(now())
+  aiCredits    Int           @default(5)
+  afaOrders    AfaOrder[]
+  agentProfile AgentProfile?
+  boostOrders  BoostOrder[]
+  dataOrders   DataOrder[]
+  pinOrders    PinOrder[]
+}
+
+model DataBundle {
+  id                String      @id @default(uuid())
+  network           String
+  label             String
+  dataSizeGb        Float
+  supplierPackageId String
+  costPrice         Float
+  sellingPrice      Float
+  validityDays      Int         @default(30)
+  active            Boolean     @default(true)
+  updatedAt         DateTime    @updatedAt
+  agentSales        AgentSale[]
+  orders            DataOrder[]
+}
+
+model DataOrder {
+  id                String            @id @default(uuid())
+  userId            String?
+  guestEmail        String?
+  bundleId          String
+  beneficiaryNumber String
+  amount            Float
+  paystackReference String?           @unique
+  paymentStatus     PaymentStatus     @default(PENDING)
+  fulfillmentStatus FulfillmentStatus @default(NOT_STARTED)
+  supplierOrderId   String?
+  failureReason     String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  agentCommission   Float?
+  referredByAgentId String?
+  bundle            DataBundle        @relation(fields: [bundleId], references: [id])
+  user              User?             @relation(fields: [userId], references: [id])
+}
+
+model PinBatch {
+  id           String   @id @default(uuid())
+  examType     String
+  year         Int
+  costPrice    Float
+  sellingPrice Float
+  uploadedBy   String
+  createdAt    DateTime @default(now())
+  pins         Pin[]
+}
+
+model Pin {
+  id           String    @id @default(uuid())
+  batchId      String
+  serialNumber String
+  pinCode      String
+  status       PinStatus @default(AVAILABLE)
+  soldToUserId String?
+  soldAt       DateTime?
+  batch        PinBatch  @relation(fields: [batchId], references: [id])
+  pinOrder     PinOrder?
+
+  @@unique([batchId, serialNumber])
+}
+
+model PinOrder {
+  id                String        @id @default(uuid())
+  userId            String?
+  guestPhone        String?
+  guestEmail        String?
+  pinId             String?       @unique
+  examType          String
+  year              Int
+  amount            Float
+  paystackReference String?       @unique
+  paymentStatus     PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  pin               Pin?          @relation(fields: [pinId], references: [id])
+  user              User?         @relation(fields: [userId], references: [id])
+}
+
+model AfaOrder {
+  id                String        @id @default(uuid())
+  userId            String?
+  agentId           String?
+  guestEmail        String?
+  fullName          String
+  phoneNumber       String
+  idNumber          String
+  dateOfBirth       String
+  town              String
+  occupation        String
+  region            String
+  cropProduce       String?
+  amount            Float
+  paystackReference String?       @unique
+  paymentStatus     PaymentStatus @default(PENDING)
+  supplierId        String?
+  supplierStatus    String?
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  agent             AgentProfile? @relation(fields: [agentId], references: [id])
+  user              User?         @relation(fields: [userId], references: [id])
+}
+
+model AfaSettings {
+  id    String @id @default("default")
+  price Float  @default(10)
+}
+
+model Refund {
+  id        String   @id @default(uuid())
+  orderType String
+  orderId   String
+  reason    String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AgentProfile {
+  id              String             @id @default(uuid())
+  userId          String             @unique
+  status          AgentStatus        @default(PENDING)
+  walletBalance   Float              @default(0)
+  discountPercent Float              @default(10)
+  createdAt       DateTime           @default(now())
+  storeMarkup     Float              @default(0)
+  storeSlug       String?            @unique
+  afaOrders       AfaOrder[]
+  user            User               @relation(fields: [userId], references: [id])
+  sales           AgentSale[]
+  transactions    AgentTransaction[]
+}
+
+model AgentTransaction {
+  id                String                 @id @default(uuid())
+  agentId           String
+  type              AgentTransactionType
+  amount            Float
+  description       String?
+  paystackReference String?                @unique
+  status            AgentTransactionStatus @default(COMPLETED)
+  createdAt         DateTime               @default(now())
+  agent             AgentProfile           @relation(fields: [agentId], references: [id])
+}
+
+model AgentSale {
+  id                String            @id @default(uuid())
+  agentId           String
+  bundleId          String
+  beneficiaryNumber String
+  resellerCost      Float
+  customerPrice     Float
+  profit            Float
+  supplierOrderId   String?
+  status            FulfillmentStatus @default(NOT_STARTED)
+  failureReason     String?
+  createdAt         DateTime          @default(now())
+  agent             AgentProfile      @relation(fields: [agentId], references: [id])
+  bundle            DataBundle        @relation(fields: [bundleId], references: [id])
+}
+
+model DigitalProduct {
+  id                 String            @id @default(uuid())
+  title              String
+  description        String?
+  category           String?
+  price              Float
+  deliveryType       String            @default("DOWNLOAD")
+  fileUrl            String            @default("")
+  revealContent      String?
+  coverUrl           String?
+  active             Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  deliveryEstimate   String?
+  featured           Boolean           @default(false)
+  instantDelivery    Boolean           @default(false)
+  instructions       String?
+  platform           String?
+  productType        String            @default("DIGITAL")
+  quantity           String?
+  requirements       String?
+  stock              Int?
+  smmQuantity        Int?
+  smmServiceId       Int?
+  gmailLabel         String?
+gmailAddress       String?
+gmailRevealSeconds Int @default(60)
+  deliveryMethods    String            @default("DIGITAL")
+  optionsJson        String?
+  requireWhatsapp    Boolean           @default(false)
+  purchases          DigitalPurchase[]
+}
+
+model DigitalPurchase {
+  id                String         @id @default(uuid())
+  productId         String
+  userId            String?
+  guestEmail        String?
+  amount            Float
+  paystackReference String         @unique
+  paymentStatus     PaymentStatus  @default(PENDING)
+  createdAt         DateTime       @default(now())
+  note              String?
+  smmOrderId        String?
+  smmStatus         String?
+  socialLink        String?
+  revealStartedAt   DateTime?
+  revealedGmailText String?
+  chosenOption      String?
+  deliveryMethod    String?
+  whatsapp          String?
+  product           DigitalProduct @relation(fields: [productId], references: [id])
+}
+
+model AiCreditPurchase {
+  id                String        @id @default(uuid())
+  userId            String
+  credits           Int
+  amount            Float
+  paystackReference String        @unique
+  paymentStatus     PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  type      String
+  source    String?
+  path      String?
+  productId String?
+  amount    Float?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([source])
+}
+
+model SmmSettings {
+  id        String @id @default("default")
+  markupPct Float  @default(30)
+  usdToGhs  Float  @default(14)
+}
+
+model BoostOrder {
+  id                String        @id @default(uuid())
+  userId            String
+  serviceId         Int
+  serviceName       String
+  link              String
+  quantity          Int
+  amount            Float
+  paystackReference String        @unique
+  paymentStatus     PaymentStatus @default(PENDING)
+  panelOrderId      String?
+  panelStatus       String?
+  createdAt         DateTime      @default(now())
+  user              User          @relation(fields: [userId], references: [id])
+}
+
 enum Role {
   CUSTOMER
   ADMIN
@@ -31,157 +313,6 @@ enum PinStatus {
   SOLD
 }
 
-model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  phone        String   @unique
-  passwordHash String
-  role         Role     @default(CUSTOMER)
-  aiCredits    Int      @default(5) // free AI-tool credits; 1 per generation
-  createdAt    DateTime @default(now())
-
-  dataOrders DataOrder[]
-  pinOrders  PinOrder[]
-  afaOrders  AfaOrder[]
-  agentProfile AgentProfile?
-  boostOrders BoostOrder[]
-  smsOrders  SmsOrder[]
-}
-
-// Manually entered by admin (Cledanet has no catalog/packages endpoint to sync
-// from) - network must be one of Cledanet's exact values: MTN, TELECEL,
-// AIRTELTIGO_ISHARE, AIRTELTIGO_BIGTIME. Ordering uses network + dataSizeGb
-// directly; supplierPackageId is kept for backward compatibility but unused.
-model DataBundle {
-  id                String   @id @default(uuid())
-  network           String
-  label              String // e.g. "10" (GB)
-  dataSizeGb        Float
-  supplierPackageId  String // unused for Cledanet - kept for schema compatibility
-  costPrice          Float // what YOU pay Cledanet per this bundle (enter manually)
-  sellingPrice       Float // what the customer pays (admin sets this)
-  validityDays       Int      @default(30)
-  active             Boolean  @default(true)
-  updatedAt          DateTime @updatedAt
-
-  orders DataOrder[]
-  agentSales AgentSale[]
-}
-
-model DataOrder {
-  id                String            @id @default(uuid())
-  userId            String?
-  user              User?             @relation(fields: [userId], references: [id])
-  guestEmail        String? // set for guest checkouts (synthetic if not provided) - required by Paystack
-  bundleId          String
-  bundle            DataBundle        @relation(fields: [bundleId], references: [id])
-  beneficiaryNumber String // recipient number - also used as the lookup phone for guest tracking
-  amount            Float // amount the CUSTOMER paid us
-  paystackReference String?           @unique
-  paymentStatus     PaymentStatus     @default(PENDING)
-  fulfillmentStatus FulfillmentStatus @default(NOT_STARTED)
-  supplierOrderId   String? // order_id returned by mydatagigs
-  referredByAgentId String? // set when the order came through an agent's storefront
-  agentCommission   Float? // the agent's markup portion, credited to their wallet on delivery
-  failureReason     String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-}
-
-model PinBatch {
-  id         String   @id @default(uuid())
-  examType   String // WAEC | BECE | NOVDCE
-  year       Int
-  costPrice  Float // what WE paid per pin in this batch
-  sellingPrice Float // what customer pays for a pin from this batch
-  uploadedBy String
-  createdAt  DateTime @default(now())
-
-  pins Pin[]
-}
-
-model Pin {
-  id           String    @id @default(uuid())
-  batchId      String
-  batch        PinBatch  @relation(fields: [batchId], references: [id])
-  serialNumber String
-  pinCode      String
-  status       PinStatus @default(AVAILABLE)
-  soldToUserId String?
-  soldAt       DateTime?
-
-  pinOrder PinOrder?
-
-  @@unique([batchId, serialNumber])
-}
-
-model PinOrder {
-  id                String        @id @default(uuid())
-  userId            String?
-  user              User?         @relation(fields: [userId], references: [id])
-  guestPhone        String? // required for guest checkout - used for public tracking lookup
-  guestEmail        String? // synthetic if not provided - required by Paystack
-  pinId             String?       @unique
-  pin               Pin?          @relation(fields: [pinId], references: [id])
-  examType          String
-  year              Int
-  amount            Float
-  paystackReference String?       @unique
-  paymentStatus     PaymentStatus @default(PENDING)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-}
-
-model AfaOrder {
-  id                String        @id @default(uuid())
-  userId            String?
-  user              User?         @relation(fields: [userId], references: [id])
-  agentId           String? // set when an agent creates this offer for their own customer (wallet-paid, no Paystack)
-  agent             AgentProfile? @relation(fields: [agentId], references: [id])
-  guestEmail        String? // synthetic if not provided - required by Paystack (customer-direct flow only)
-  fullName          String
-  phoneNumber       String
-  idNumber          String
-  dateOfBirth       String // "YYYY-MM-DD"
-  town              String
-  occupation        String
-  region            String
-  cropProduce       String?
-  amount            Float
-  paystackReference String?       @unique // null for agent-created offers (wallet-paid instead)
-  paymentStatus     PaymentStatus @default(PENDING)
-  supplierId        String? // Cledanet's registration id, once submitted
-  supplierStatus    String? // raw status text from Cledanet - e.g. "PENDING"
-  failureReason     String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-}
-
-// Single-row settings table for the AFA registration price, admin-editable.
-model AfaSettings {
-  id    String @id @default("default")
-  price Float  @default(10)
-}
-
-model Refund {
-  id           String   @id @default(uuid())
-  orderType    String // "data" | "pin"
-  orderId      String
-  reason       String
-  status       String   @default("pending") // pending | processed | rejected
-  createdAt    DateTime @default(now())
-}
-
-model Announcement {
-  id        String   @id @default(uuid())
-  title     String
-  body      String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 enum AgentStatus {
   PENDING
   APPROVED
@@ -199,200 +330,4 @@ enum AgentTransactionStatus {
   PENDING
   COMPLETED
   FAILED
-}
-
-// An agent buys bundles into their own wallet at a discounted reseller price,
-// then resells to their own customers (collected outside the platform - cash,
-// momo transfer directly to the agent) at whatever price they choose. Profit
-// is tracked here for their own records.
-model AgentProfile {
-  id              String      @id @default(uuid())
-  userId          String      @unique
-  user            User        @relation(fields: [userId], references: [id])
-  status          AgentStatus @default(PENDING)
-  walletBalance   Float       @default(0)
-  discountPercent Float       @default(10) // % off the normal selling price for reseller cost
-  storeSlug       String?     @unique // public storefront link name, e.g. /store/kwamedata
-  storeMarkup     Float       @default(0) // % the agent adds on top of retail on their storefront
-  createdAt       DateTime    @default(now())
-
-  transactions AgentTransaction[]
-  sales        AgentSale[]
-  afaOrders    AfaOrder[]
-}
-
-model AgentTransaction {
-  id                String                  @id @default(uuid())
-  agentId           String
-  agent             AgentProfile            @relation(fields: [agentId], references: [id])
-  type              AgentTransactionType
-  amount            Float
-  description       String?
-  paystackReference String?                 @unique // set for TOPUP
-  status            AgentTransactionStatus  @default(COMPLETED)
-  createdAt         DateTime                @default(now())
-}
-
-model AgentSale {
-  id                String   @id @default(uuid())
-  agentId           String
-  agent             AgentProfile @relation(fields: [agentId], references: [id])
-  bundleId          String
-  bundle            DataBundle @relation(fields: [bundleId], references: [id])
-  beneficiaryNumber String
-  resellerCost      Float // what it cost the agent (discounted)
-  customerPrice     Float // what the agent charged their own customer
-  profit            Float
-  supplierOrderId   String?
-  status            FulfillmentStatus @default(NOT_STARTED)
-  failureReason     String?
-  createdAt         DateTime @default(now())
-}
-
-// Digital products: downloadable items the admin adds (title, price, file URL).
-// Customer pays via Paystack; on payment the download link unlocks. Guest
-// checkout supported via guestEmail, matching the data/pin order pattern.
-model DigitalProduct {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  instructions String? // shown on the product page before buying
-  category    String?
-  price       Float
-  productType String  @default("DIGITAL") // DIGITAL (files/links/reveal) | BOOSTING (social media boosting)
-  deliveryType String  @default("DOWNLOAD") // DOWNLOAD (a file) | LINK (access link) | REVEAL (text/code shown after payment) | GMAIL_LATEST (latest Gmail email, shown for a timed window)
-  fileUrl     String   @default("") // file URL to download, access link to open, or unused for REVEAL/BOOSTING/GMAIL_LATEST
-  revealContent String? // REVEAL type only: the text/code shown to the buyer after payment
-  gmailLabel         String?  // GMAIL_LATEST only: Gmail label used to identify the relevant email
-gmailAddress       String?  // GMAIL_LATEST only: Gmail address customers should use to request the sign-in code
-gmailRevealSeconds Int      @default(60) // GMAIL_LATEST only: how long the email stays visible once revealed
-  coverUrl    String?
-  active      Boolean  @default(true)
-  featured    Boolean  @default(false) // shows in the "Top picks" row
-  instantDelivery Boolean @default(false) // shows the "Instant delivery" tag
-
-  // Batch A: manual/activation products
-  optionsJson     String? // JSON array of { name, price } packages the customer chooses from
-  deliveryMethods String  @default("DIGITAL") // comma list: "DIGITAL", "ACTIVATION", or "DIGITAL,ACTIVATION"
-  requireWhatsapp Boolean @default(false) // require a WhatsApp number at checkout
-
-  // Stock / inventory (applies to all product types). null = unlimited stock.
-  stock       Int?
-
-  // Social media boosting fields (used when productType = "BOOSTING")
-  platform        String? // Instagram | TikTok | Facebook | YouTube | Telegram | X
-  quantity        String? // e.g. "1000 followers"
-  deliveryEstimate String? // e.g. "24-48 hours"
-  requirements    String? // e.g. "Account must be public"
-  smmServiceId    Int?    // gainrealgrowth service ID (enables auto-fulfilment)
-  smmQuantity     Int?    // quantity to order from the panel per purchase
-
-  createdAt   DateTime @default(now())
-
-  purchases   DigitalPurchase[]
-}
-
-model DigitalPurchase {
-  id                String   @id @default(uuid())
-  productId         String
-  product           DigitalProduct @relation(fields: [productId], references: [id])
-  userId            String?
-  guestEmail        String?
-  amount            Float
-  paystackReference String   @unique
-  paymentStatus     PaymentStatus @default(PENDING)
-  socialLink        String? // customer's link for boosting orders
-  note              String? // optional note to seller
-  whatsapp          String? // customer's WhatsApp for manual fulfilment
-  chosenOption      String? // name of the option/package the customer picked
-  deliveryMethod    String? // "DIGITAL" or "ACTIVATION" the customer chose
-  smmOrderId        String? // panel order id once placed
-  smmStatus         String? // panel order status
-  createdAt         DateTime @default(now())
-
-  // GMAIL_LATEST reveal state - one-time, timed reveal. revealStartedAt is set
-  // the FIRST time the buyer opens the reveal (not at payment time); the email
-  // text is fetched once then cached here so re-requests during the window
-  // don't re-hit Gmail, and requests after gmailRevealSeconds has elapsed get
-  // nothing back even though the row still exists.
-  revealStartedAt   DateTime?
-  revealedGmailText String?
-  confirmedAt       DateTime? // GMAIL_LATEST only: set the moment the buyer ticks "I've requested my code" -
-                              // only an email that arrives AFTER this timestamp is ever shown, so a stale/old
-                              // message already sitting in the label can never be handed to the wrong buyer.
-}
-
-// Records a credit top-up (₵5 → 10 credits) paid via Paystack. Credits are
-// added to User.aiCredits when payment is confirmed.
-model AiCreditPurchase {
-  id                String        @id @default(uuid())
-  userId            String
-  credits           Int
-  amount            Float
-  paystackReference String        @unique
-  paymentStatus     PaymentStatus @default(PENDING)
-  createdAt         DateTime      @default(now())
-}
-
-// Lightweight analytics: page visits, product views, checkout starts, and sales,
-// plus where the visitor came from (utm/referrer). Powers the admin Analytics
-// dashboard with Today / 7 / 30 / 90-day filters.
-model AnalyticsEvent {
-  id        String   @id @default(uuid())
-  type      String   // "visit" | "product_view" | "checkout_start" | "sale"
-  source    String?  // tiktok | whatsapp | google | instagram | x | facebook | direct | ...
-  path      String?  // page path
-  productId String?
-  amount    Float?   // for "sale" events
-  createdAt DateTime @default(now())
-
-  @@index([type, createdAt])
-  @@index([source])
-}
-
-// Global settings for social media boosting pricing.
-model SmmSettings {
-  id         String @id @default("default")
-  markupPct  Float  @default(30)  // % added on top of cost
-  usdToGhs   Float  @default(14)  // exchange rate
-}
-
-// A customer's boosting order (pay-per-order via Paystack, then placed on the panel).
-model BoostOrder {
-  id                String   @id @default(uuid())
-  userId            String
-  user              User     @relation(fields: [userId], references: [id])
-  serviceId         Int      // gainrealgrowth service id
-  serviceName       String
-  link              String
-  quantity          Int
-  amount            Float    // GHS charged to the customer
-  paystackReference String   @unique
-  paymentStatus     PaymentStatus @default(PENDING)
-  panelOrderId      String?  // panel order id once placed
-  panelStatus       String?  // In progress | Partial | Completed | ...
-  createdAt         DateTime @default(now())
-}
-
-// A customer's SMS-number rental (pay via Paystack, then a number is rented
-// from SMSPool and the incoming verification code is polled for and shown,
-// live, with a countdown until the number's rental window expires).
-model SmsOrder {
-  id                String   @id @default(uuid())
-  userId            String
-  user              User     @relation(fields: [userId], references: [id])
-  countryId         String   // SMSPool country ID
-  countryName       String
-  serviceId         String   // SMSPool service ID
-  serviceName       String
-  amount            Float    // GHS charged to the customer
-  paystackReference String   @unique
-  paymentStatus     PaymentStatus @default(PENDING)
-  poolOrderId       String?  // SMSPool's order_id, once rented
-  phoneNumber       String?  // the rented number
-  smsCode           String?  // the verification code, once received
-  fullSms           String?  // full message text, once received
-  status            String   @default("PENDING") // PENDING | WAITING | RECEIVED | EXPIRED | FAILED | CANCELLED
-  expiresAt         DateTime? // when the rental window closes
-  createdAt         DateTime @default(now())
 }
