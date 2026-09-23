@@ -13,6 +13,7 @@ import {
   Check,
   Clock,
   Send,
+  ClipboardList,
 } from "lucide-react";
 
 // Circular countdown ring for the timed Gmail reveal.
@@ -156,6 +157,7 @@ function DownloadInner() {
           data.phase === "expired"
         ) {
           setSecondsLeft(0);
+
           setItem((prev) =>
             prev
               ? {
@@ -350,7 +352,9 @@ function DownloadInner() {
             </span>
           </p>
 
-          {/* Normal REVEAL product */}
+          {/* =========================================
+              NORMAL REVEAL PRODUCT
+             ========================================= */}
           {item.deliveryType === "REVEAL" ? (
             <div className="mt-5 text-left">
               <p className="label">Your details</p>
@@ -373,10 +377,11 @@ function DownloadInner() {
               </button>
             </div>
           ) : item.deliveryType === "GMAIL_LATEST" ? (
+            /* =========================================
+               GMAIL LATEST
+               ========================================= */
             <div className="mt-5 text-left">
-              {/* ================================
-                  STEP 1 — ASK CUSTOMER TO CONFIRM
-                 ================================= */}
+              {/* STEP 1 — ASK CUSTOMER TO CONFIRM */}
               {item.phase === "awaiting_confirmation" && (
                 <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
                   <div className="flex items-start gap-3">
@@ -396,7 +401,6 @@ function DownloadInner() {
                         Request the sign-in code using this Gmail:
                       </p>
 
-                      {/* Gmail address */}
                       <p className="mt-2 break-all text-sm font-bold text-ink">
                         {item.gmailAddress ||
                           "Gmail address not configured"}
@@ -448,9 +452,7 @@ function DownloadInner() {
                 </div>
               )}
 
-              {/* ================================
-                  STEP 2 — WAITING FOR NEW EMAIL
-                 ================================= */}
+              {/* STEP 2 — WAITING FOR NEW EMAIL */}
               {item.phase === "waiting" && (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border border-ink/10 bg-mist/60 px-4 py-8 text-center">
                   <Loader2
@@ -473,9 +475,7 @@ function DownloadInner() {
                 </div>
               )}
 
-              {/* ================================
-                  STEP 3 — FIVE-MINUTE TIMEOUT
-                 ================================= */}
+              {/* STEP 3 — FIVE-MINUTE TIMEOUT */}
               {item.phase === "wait_timed_out" && (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border border-ghRed/20 bg-ghRed/5 px-4 py-8 text-center">
                   <Mail
@@ -507,14 +507,14 @@ function DownloadInner() {
                       <Send size={16} />
                     )}
 
-                    {confirming ? "Trying again…" : "Try again"}
+                    {confirming
+                      ? "Trying again…"
+                      : "Try again"}
                   </button>
                 </div>
               )}
 
-              {/* ================================
-                  STEP 4 — EMAIL REVEALED
-                 ================================= */}
+              {/* STEP 4 — EMAIL REVEALED */}
               {item.phase === "revealed" && (
                 <div className="overflow-hidden rounded-2xl border border-primary/15 bg-white shadow-sm">
                   <div className="flex items-center justify-between gap-3 border-b border-ink/5 bg-gradient-to-r from-primary/5 to-transparent px-4 py-3">
@@ -568,9 +568,7 @@ function DownloadInner() {
                 </div>
               )}
 
-              {/* ================================
-                  STEP 5 — REVEAL EXPIRED
-                 ================================= */}
+              {/* STEP 5 — REVEAL EXPIRED */}
               {item.phase === "expired" && (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border border-ink/10 bg-mist/60 px-4 py-8 text-center">
                   <Mail
@@ -590,25 +588,61 @@ function DownloadInner() {
               )}
             </div>
           ) : (
-            /* Normal download/link */
-            <a
-              href={item.fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary mt-5 inline-flex items-center gap-2"
-            >
-              {item.deliveryType === "LINK" ? (
-                <>
+            /* =========================================
+               MANUAL / LINK / DOWNLOAD
+               ========================================= */
+            <>
+              {[
+                "MANUAL",
+                "MANUAL_FULFILMENT",
+                "MANUAL_FULFILLMENT",
+              ].includes(item.deliveryType) ? (
+                <div className="mt-5 rounded-2xl border border-ink/10 bg-mist/60 px-5 py-8 text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <ClipboardList
+                      size={24}
+                      className="text-primary"
+                    />
+                  </div>
+
+                  <h2 className="mt-4 text-base font-semibold text-ink">
+                    Order received
+                  </h2>
+
+                  <p className="mt-2 text-sm leading-relaxed text-slate">
+                    Your payment was successful. This product
+                    requires manual fulfilment, so we&rsquo;ll
+                    process your order and provide the delivery
+                    details separately.
+                  </p>
+
+                  <p className="mt-4 text-xs leading-relaxed text-slate">
+                    Please keep your payment reference and check
+                    your contact details for updates.
+                  </p>
+                </div>
+              ) : item.deliveryType === "LINK" ? (
+                <a
+                  href={item.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary mt-5 inline-flex items-center gap-2"
+                >
                   <ExternalLink size={16} />
                   Open Link
-                </>
+                </a>
               ) : (
-                <>
+                <a
+                  href={item.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary mt-5 inline-flex items-center gap-2"
+                >
                   <Download size={16} />
                   Download Now
-                </>
+                </a>
               )}
-            </a>
+            </>
           )}
         </>
       )}
@@ -630,3 +664,4 @@ export default function DownloadsPage() {
     </Suspense>
   );
 }
+

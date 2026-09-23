@@ -1,3 +1,4 @@
+prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -70,16 +71,15 @@ model PinBatch {
 }
 
 model Pin {
-  id           String    @id @default(uuid())
-  batchId      String
-  serialNumber String
-  pinCode      String
-  status       PinStatus @default(AVAILABLE)
-  soldToUserId String?
-  soldAt       DateTime?
-  batch        PinBatch  @relation(fields: [batchId], references: [id])
-  pinOrder     PinOrder?
-
+  id             String    @id @default(uuid())
+  batchId        String
+  serialNumber   String
+  pinCode        String
+  status         PinStatus @default(AVAILABLE)
+  soldToUserId   String?
+  soldAt         DateTime?
+  batch          PinBatch  @relation(fields: [batchId], references: [id])
+  pinOrder       PinOrder?
   @@unique([batchId, serialNumber])
 }
 
@@ -172,7 +172,7 @@ model AgentTransaction {
   paystackReference String?                @unique
   status            AgentTransactionStatus @default(COMPLETED)
   createdAt         DateTime               @default(now())
-  agent             AgentProfile           @relation(fields: [agentId], references: [id])
+  agent             AgentProfile            @relation(fields: [agentId], references: [id])
 }
 
 model AgentSale {
@@ -215,40 +215,41 @@ model DigitalProduct {
   smmQuantity        Int?
   smmServiceId       Int?
   gmailLabel         String?
-gmailAddress       String?
-gmailRevealSeconds Int @default(60)
+  gmailAddress       String?
+  gmailRevealSeconds Int               @default(60)
   deliveryMethods    String            @default("DIGITAL")
   optionsJson        String?
-  requireWhatsapp    Boolean           @default(false)
+  requireWhatsapp    Boolean            @default(false)
   purchases          DigitalPurchase[]
 }
 
 model DigitalPurchase {
-  id                String         @id @default(uuid())
-  productId         String
-  userId            String?
-  guestEmail        String?
-  amount            Float
-  paystackReference String         @unique
-  paymentStatus     PaymentStatus  @default(PENDING)
-  createdAt         DateTime       @default(now())
-  note              String?
-  smmOrderId        String?
-  smmStatus         String?
-  socialLink        String?
-  revealStartedAt   DateTime?
-revealedGmailText String?
-confirmedAt       DateTime?
-  chosenOption      String?
-  deliveryMethod    String?
-  whatsapp          String?
-  product           DigitalProduct @relation(fields: [productId], references: [id])
+  id                      String         @id @default(uuid())
+  productId               String
+  userId                  String?
+  guestEmail              String?
+  amount                  Float
+  paystackReference       String         @unique
+  paymentStatus           PaymentStatus  @default(PENDING)
+  createdAt               DateTime       @default(now())
+  note                    String?
+  smmOrderId              String?
+  smmStatus               String?
+  socialLink              String?
+  revealStartedAt         DateTime?
+  revealedGmailInstruction String?
+  revealedGmailText       String?
+  confirmedAt             DateTime?
+  chosenOption             String?
+  deliveryMethod           String?
+  whatsapp                 String?
+  product                  DigitalProduct @relation(fields: [productId], references: [id])
 }
 
 model AiCreditPurchase {
   id                String        @id @default(uuid())
   userId            String
-  credits           Int
+  credits            Int
   amount            Float
   paystackReference String        @unique
   paymentStatus     PaymentStatus @default(PENDING)
@@ -332,3 +333,4 @@ enum AgentTransactionStatus {
   COMPLETED
   FAILED
 }
+

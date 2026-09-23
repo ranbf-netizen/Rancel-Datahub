@@ -8,8 +8,10 @@ import { google } from "googleapis";
  * The Gmail account is controlled by the site owner.
  * Customers never access Gmail directly.
  *
- * GMAIL_LATEST only returns a recognized OTP/code from a
- * newly received email. It does NOT return the full email.
+ * GMAIL_LATEST only returns a recognized OTP/code and a short
+ * instruction from a newly received email.
+ *
+ * It does NOT return the full email.
  */
 
 function getGmailClient() {
@@ -96,54 +98,80 @@ function extractText(payload: any): string | null {
 }
 
 /**
- * Extract a recognizable OTP / verification code from email text.
- *
- * We intentionally look for codes near words such as:
- * - verification code
- * - security code
- * - sign-in code
- * - login code
- * - confirmation code
- * - OTP
- * - one-time password
- *
- * This avoids blindly taking the first random number in an email,
- * such as an order number, amount, date, or reference number.
- *
- * Code length is variable: 4-12 alphanumeric characters.
+ * Result returned after analyzing an email.
  */
-function extractOtpCode(text: string): string | null {
-  const normalizedText = text.replace(/\s+/g, " ").trim();
+function extractOtpData(text: string): {
+  code: string | null;
+  instruction: string | null;
+} {
+  const normalizedText = text
+    .replace(/\r/g, " ")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
+  /**
+   * We look for the OTP close to common verification phrases.
+   *
+   * Supported examples:
+   *
+   * "Your verification code is 123456"
+   * "Verification code: 123456"
+   * "Your security code is ABC123"
+   * "Sign-in code: 123456"
+   * "Use 123456 to sign in"
+   * "Enter 123456 to continue"
+   */
   const codePatterns = [
-    // "Your verification code is 123456"
-    /(?:verification|security|sign[\s-]?in|login|confirmation)\s+code\s+(?:is\s+)?[:\-]?\s*([A-Z0-9]{4,12})\b/i,
+    /(?:your\s+)?(?:verification|security|sign[\s-]?in|login|confirmation)\s+code\s+(?:is\s+)?[:\-]?\s*([A-Z0-9]{4,12})\b/i,
 
-    // "Verification code: 123456"
-    /(?:verification|security|sign[\s-]?in|login|confirmation)\s+code\s*[:\-]\s*([A-Z0-9]{4,12})\b/i,
+    /(?:your\s+)?(?:verification|security|sign[\s-]?in|login|confirmation)\s+code\s*[:\-]\s*([A-Z0-9]{4,12})\b/i,
 
-    // "OTP: 123456" / "OTP is 123456"
     /\bOTP\s+(?:is\s+)?[:\-]?\s*([A-Z0-9]{4,12})\b/i,
 
-    // "One-time password: 123456"
-    /\bone[-\s]?time\s+password\s*(?:is\s+)?[:\-]\s*([A-Z0-9]{4,12})\b/i,
+    /\bone[-\s]?time\s+password\s*(?:is\s+)?[:\-]?\s*([A-Z0-9]{4,12})\b/i,
 
-    // "Use 123456 to sign in"
-    /\b(?:use|enter|type)\s+([A-Z0-9]{4,12})\s+(?:to\s+)?(?:sign\s*in|login|log\s*in|verify|continue)\b/i,
-
-    // "Enter this code 123456"
-    /\b(?:enter|type|input)\s+(?:this\s+)?(?:code\s+)?([A-Z0-9]{4,12})\b/i,
+    /\b(?:use|enter|type|input)\s+([A-Z0-9]{4,12})\s+(?:to\s+)?(?:sign\s*in|login|log\s*in|verify|continue)\b/i,
   ];
+
+  let code: string | null = null;
 
   for (const pattern of codePatterns) {
     const match = normalizedText.match(pattern);
 
     if (match?.[1]) {
-      return match[1].trim();
+      code = match[1].trim();
+      break;
     }
   }
 
-  return null;
+  if (!code) {
+    return {
+      code: null,
+      instruction: null,
+    };
+  }
+
+  /**
+   * Build a short customer-facing instruction.
+   *
+   * We intentionally do not return the entire email.
+   */
+  let instruction =
+    "Use this code to complete your sign-in or verification.";
+
+  if (/sign[\s-]?in|login|log\s*in/i.test(normalizedText)) {
+    instruction = "Use this code to sign in.";
+  } else if (/verify|verification/i.test(normalizedText)) {
+    instruction = "Use this code to verify your account.";
+  } else if (/confirm|confirmation/i.test(normalizedText)) {
+    instruction = "Use this code to confirm your request.";
+  }
+
+  return {
+    code,
+    instruction,
+  };
 }
 
 /**
@@ -152,8 +180,7 @@ function extractOtpCode(text: string): string | null {
  * Kept for compatibility with other parts of the project.
  *
  * IMPORTANT:
- * This function returns the email text because it is a legacy/helper
- * function. GMAIL_LATEST does NOT use this function to reveal content
+ * GMAIL_LATEST does NOT use this function to reveal content
  * to customers.
  */
 export async function getLatestGmailText(
@@ -207,7 +234,7 @@ export async function getLatestGmailText(
  * 3. found
  *    A new email arrived and a recognizable OTP/code was found.
  *
- * Only the OTP/code is returned when found.
+ * Only the extracted instruction and OTP/code are returned.
  *
  * The full Gmail message is NEVER returned by this function.
  */
@@ -216,6 +243,7 @@ export async function getLatestGmailTextAfter(
   afterMs: number
 ): Promise<{
   found: boolean;
+  instruction: string | null;
   text: string | null;
   reason?: "no_new_email" | "code_not_found";
 }> {
@@ -224,11 +252,11 @@ export async function getLatestGmailTextAfter(
   const q = label ? `label:${label}` : "";
 
   /**
-   * Gmail normally returns messages with the newest first.
+   * Request several messages instead of only one.
    *
-   * We request a few messages instead of only one so that if the
-   * newest message is irrelevant, we can still find the newest
-   * qualifying email received after `afterMs`.
+   * This allows us to ignore a newer irrelevant email and
+   * continue looking for another newly received email that
+   * contains the actual verification code.
    */
   const list = await gmail.users.messages.list({
     userId: "me",
@@ -241,15 +269,14 @@ export async function getLatestGmailTextAfter(
   if (!messages || messages.length === 0) {
     return {
       found: false,
+      instruction: null,
       text: null,
       reason: "no_new_email",
     };
   }
 
   /**
-   * Check the newest messages first.
-   *
-   * We keep track of whether a new email exists at all.
+   * Track whether at least one genuinely new email exists.
    */
   let newestNewEmailFound = false;
 
@@ -272,72 +299,7 @@ export async function getLatestGmailTextAfter(
      */
     const internalDate = Number(msg.data.internalDate);
 
-    /**
-     * Ignore messages with an invalid timestamp.
-     */
     if (!internalDate) {
       continue;
     }
 
-    /**
-     * IMPORTANT:
-     *
-     * The email must have arrived AFTER the customer confirmed
-     * that they requested the code.
-     *
-     * This prevents an old OTP already sitting in Gmail from
-     * being shown to a new customer.
-     */
-    if (internalDate <= afterMs) {
-      continue;
-    }
-
-    newestNewEmailFound = true;
-
-    const emailText =
-      extractText(msg.data.payload)?.trim() || "";
-
-    /**
-     * We have a new email.
-     *
-     * Now look specifically for an OTP/code.
-     */
-    const code = extractOtpCode(emailText);
-
-    if (code) {
-      return {
-        found: true,
-        text: code,
-      };
-    }
-
-    /**
-     * This email is new, but it does not contain a recognizable
-     * verification/OTP code.
-     *
-     * Continue checking older NEW emails in case another email
-     * arrived shortly after it and contains the actual code.
-     */
-  }
-
-  /**
-   * At least one new email exists, but none of the new emails
-   * contained a recognizable OTP.
-   */
-  if (newestNewEmailFound) {
-    return {
-      found: false,
-      text: null,
-      reason: "code_not_found",
-    };
-  }
-
-  /**
-   * No email newer than afterMs was found.
-   */
-  return {
-    found: false,
-    text: null,
-    reason: "no_new_email",
-  };
-}
