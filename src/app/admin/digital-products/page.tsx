@@ -1,4 +1,4 @@
-```tsx
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -1063,7 +1063,7 @@ function OptionsEditor({
     </div>
   );
 }
-```
+
 
 ### What I changed
 
