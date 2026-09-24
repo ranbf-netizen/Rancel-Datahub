@@ -12,12 +12,12 @@ import {
   Copy,
   Check,
   Clock,
-  Send,
   ClipboardList,
+  TriangleAlert,
 } from "lucide-react";
 
-// Circular countdown ring for the timed Gmail reveal.
-// This is visual only. The server remains authoritative.
+// Visual countdown only.
+// The server remains authoritative about whether the reveal is still valid.
 function CountdownRing({
   secondsLeft,
   totalSeconds,
@@ -65,8 +65,7 @@ function CountdownRing({
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           style={{
-            transition:
-              "stroke-dashoffset 1s linear, stroke 0.3s",
+            transition: "stroke-dashoffset 1s linear, stroke 0.3s",
           }}
         />
       </svg>
@@ -86,39 +85,52 @@ function DownloadInner() {
     "loading" | "paid" | "pending" | "error"
   >("loading");
 
+  const [errorMessage, setErrorMessage] = useState("");
+
   const [item, setItem] = useState<{
     title: string;
     fileUrl: string;
     deliveryType: string;
     revealContent: string | null;
 
-    // Gmail-specific fields
     gmailAddress?: string | null;
+    revealInstruction?: string | null;
     secondsRemaining?: number;
     totalSeconds?: number;
-    expired?: boolean;
     phase?: string;
   } | null>(null);
 
   const [copied, setCopied] = useState(false);
+  const [checkingCode, setCheckingCode] = useState(false);
+
+  // Customer must acknowledge that they requested the
+  // Netflix sign-in code before the one-time check.
+  const [codeRequested, setCodeRequested] = useState(false);
+
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [totalSeconds, setTotalSeconds] = useState<number>(60);
 
-  const [confirmChecked, setConfirmChecked] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-
   /**
-   * Check the current delivery status.
+   * Load the purchase.
    */
-  async function check() {
+  async function loadPurchase(checkCode = false) {
     if (!ref) {
+      setErrorMessage("Missing purchase reference.");
       setState("error");
       return;
     }
 
     try {
+      const query = new URLSearchParams({
+        ref,
+      });
+
+      if (checkCode) {
+        query.set("checkCode", "1");
+      }
+
       const res = await fetch(
-        `/api/digital-products/download?ref=${encodeURIComponent(ref)}`,
+        `/api/digital-products/download?${query.toString()}`,
         {
           cache: "no-store",
         }
@@ -126,14 +138,19 @@ function DownloadInner() {
 
       const data = await res.json();
 
+      if (!res.ok) {
+        setErrorMessage(
+          data?.error ||
+            "Something went wrong while loading your purchase."
+        );
+        setState("error");
+        return;
+      }
+
       if (data.status === "paid") {
         setItem(data);
         setState("paid");
 
-        /**
-         * When the Gmail email has been revealed,
-         * initialise the visual countdown.
-         */
         if (
           data.deliveryType === "GMAIL_LATEST" &&
           data.phase === "revealed" &&
@@ -146,35 +163,30 @@ function DownloadInner() {
               ? data.totalSeconds
               : 60
           );
+        } else {
+          setSecondsLeft(null);
         }
 
-        /**
-         * If the server says the reveal has expired,
-         * immediately clear the client-side content too.
-         */
-        if (
-          data.deliveryType === "GMAIL_LATEST" &&
-          data.phase === "expired"
-        ) {
-          setSecondsLeft(0);
-
-          setItem((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  revealContent: null,
-                  expired: true,
-                  phase: "expired",
-                }
-              : prev
-          );
-        }
-      } else if (data.status === "pending") {
-        setState("pending");
-      } else {
-        setState("error");
+        return;
       }
-    } catch {
+
+      if (data.status === "pending") {
+        setState("pending");
+        return;
+      }
+
+      setErrorMessage(
+        data?.error ||
+          "Something went wrong while loading your purchase."
+      );
+      setState("error");
+    } catch (error) {
+      console.error("DOWNLOAD PAGE ERROR:", error);
+
+      setErrorMessage(
+        "We couldn't load your purchase. Please try again."
+      );
+
       setState("error");
     }
   }
@@ -183,33 +195,95 @@ function DownloadInner() {
    * Initial payment/delivery check.
    */
   useEffect(() => {
-    check();
+    loadPurchase();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ref]);
 
   /**
-   * While waiting for a new Gmail message,
-   * check automatically every 4 seconds.
+   * One-time Gmail code check.
    */
-  useEffect(() => {
-    if (item?.deliveryType !== "GMAIL_LATEST") return;
-    if (item?.phase !== "waiting") return;
+  async function checkForCode() {
+    if (!ref || checkingCode || !codeRequested) return;
 
-    const timer = setInterval(() => {
-      check();
-    }, 4000);
+    setCheckingCode(true);
+    setSecondsLeft(null);
+    setCopied(false);
 
-    return () => clearInterval(timer);
+    try {
+      const query = new URLSearchParams({
+        ref,
+        checkCode: "1",
+      });
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.deliveryType, item?.phase]);
+      const res = await fetch(
+        `/api/digital-products/download?${query.toString()}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(
+          data?.error || "We couldn't check for the code."
+        );
+        setState("error");
+        return;
+      }
+
+      if (data.status === "paid") {
+        setItem(data);
+        setState("paid");
+
+        if (
+          data.phase === "revealed" &&
+          typeof data.secondsRemaining === "number"
+        ) {
+          setSecondsLeft(data.secondsRemaining);
+
+          setTotalSeconds(
+            typeof data.totalSeconds === "number"
+              ? data.totalSeconds
+              : 60
+          );
+        } else {
+          setSecondsLeft(null);
+        }
+
+        return;
+      }
+
+      if (data.status === "pending") {
+        setState("pending");
+        return;
+      }
+
+      setErrorMessage(
+        data?.error || "We couldn't check for the code."
+      );
+      setState("error");
+    } catch (error) {
+      console.error("CHECK CODE ERROR:", error);
+
+      setErrorMessage(
+        "We couldn't check for the code. Please try again."
+      );
+
+      setState("error");
+    } finally {
+      // The acknowledgement is always reset after the
+      // one-time check attempt.
+      setCodeRequested(false);
+      setCheckingCode(false);
+    }
+  }
 
   /**
    * Visual countdown.
    *
-   * This does NOT determine whether the email is accessible.
-   * The server does that.
+   * The backend remains authoritative.
    */
   useEffect(() => {
     if (secondsLeft === null) return;
@@ -220,7 +294,7 @@ function DownloadInner() {
           ? {
               ...prev,
               revealContent: null,
-              expired: true,
+              revealInstruction: null,
               phase: "expired",
             }
           : prev
@@ -239,48 +313,7 @@ function DownloadInner() {
   }, [secondsLeft]);
 
   /**
-   * Tell the backend that the customer has requested
-   * a new sign-in code.
-   */
-  async function confirmRequested() {
-    if (!ref) return;
-
-    setConfirming(true);
-
-    try {
-      const res = await fetch(
-        "/api/digital-products/confirm-request",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ ref }),
-        }
-      );
-
-      if (!res.ok) {
-        setState("error");
-        return;
-      }
-
-      /**
-       * Reset the visual state before checking again.
-       * This is especially useful when "Try again" is clicked.
-       */
-      setSecondsLeft(null);
-      setConfirmChecked(false);
-
-      await check();
-    } catch {
-      setState("error");
-    } finally {
-      setConfirming(false);
-    }
-  }
-
-  /**
-   * Copy revealed Gmail content.
+   * Copy revealed Gmail code.
    */
   async function copyContent() {
     if (!item?.revealContent) return;
@@ -325,7 +358,7 @@ function DownloadInner() {
           </p>
 
           <button
-            onClick={check}
+            onClick={() => loadPurchase()}
             className="btn-primary mt-4"
           >
             Refresh
@@ -378,11 +411,13 @@ function DownloadInner() {
             </div>
           ) : item.deliveryType === "GMAIL_LATEST" ? (
             /* =========================================
-               GMAIL LATEST
+               GMAIL LATEST FLOW
                ========================================= */
             <div className="mt-5 text-left">
-              {/* STEP 1 — ASK CUSTOMER TO CONFIRM */}
-              {item.phase === "awaiting_confirmation" && (
+              {/* -----------------------------------------
+                  READY / FIRST VISIT
+                 ----------------------------------------- */}
+              {(item.phase === "ready" || !item.phase) && (
                 <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 rounded-full bg-primary/10 p-2">
@@ -392,13 +427,14 @@ function DownloadInner() {
                       />
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-semibold text-ink">
-                        Before we check your inbox
+                        Use this Gmail to sign in
                       </p>
 
                       <p className="mt-1 text-sm leading-relaxed text-slate">
-                        Request the sign-in code using this Gmail:
+                        Use the Gmail below when signing in and
+                        request the verification code.
                       </p>
 
                       <p className="mt-2 break-all text-sm font-bold text-ink">
@@ -408,182 +444,235 @@ function DownloadInner() {
                     </div>
                   </div>
 
-                  <p className="mt-4 text-sm leading-relaxed text-slate">
-                    Go to the sign-in screen and request your
-                    code. Once you&rsquo;ve requested it, confirm
-                    below and we&rsquo;ll start checking for the
-                    new email.
-                  </p>
+                  {/* Red caution */}
+                  <div className="mt-4 rounded-xl border border-ghRed/20 bg-ghRed/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <TriangleAlert
+                        size={19}
+                        className="mt-0.5 shrink-0 text-ghRed"
+                      />
 
-                  <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-ink">
+                      <div>
+                        <p className="text-sm font-bold text-ghRed">
+                          IMPORTANT
+                        </p>
+
+                        <p className="mt-1 text-sm leading-relaxed text-ink">
+                          Please request your Netflix sign-in
+                          code{" "}
+                          <span className="font-bold">
+                            BEFORE
+                          </span>{" "}
+                          clicking &ldquo;Check for code&rdquo;.
+                        </p>
+
+                        <p className="mt-2 text-xs leading-relaxed text-slate">
+                          This is a one-time check. Make sure you
+                          have requested the code on Netflix before
+                          continuing.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Required acknowledgement */}
+                  <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm text-ink">
                     <input
                       type="checkbox"
-                      className="mt-0.5"
-                      checked={confirmChecked}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-[#006B3F]"
+                      checked={codeRequested}
                       onChange={(e) =>
-                        setConfirmChecked(e.target.checked)
+                        setCodeRequested(e.target.checked)
                       }
+                      disabled={checkingCode}
                     />
 
-                    <span>
-                      I&rsquo;ve requested the sign-in code using
-                      the Gmail above.
+                    <span className="leading-relaxed">
+                      I confirm that I have requested a sign-in
+                      code on Netflix.
                     </span>
                   </label>
 
+                  {/* Check for code */}
                   <button
-                    onClick={confirmRequested}
-                    disabled={!confirmChecked || confirming}
+                    onClick={checkForCode}
+                    disabled={
+                      !codeRequested ||
+                      checkingCode ||
+                      !item.gmailAddress
+                    }
                     className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {confirming ? (
+                    {checkingCode ? (
                       <Loader2
                         size={16}
                         className="animate-spin"
                       />
                     ) : (
-                      <Send size={16} />
+                      <MailOpen size={16} />
                     )}
 
-                    {confirming
-                      ? "Checking…"
-                      : "I've requested it — show my code"}
+                    {checkingCode
+                      ? "Checking for code…"
+                      : "Check for code"}
                   </button>
                 </div>
               )}
 
-              {/* STEP 2 — WAITING FOR NEW EMAIL */}
-              {item.phase === "waiting" && (
-                <div className="flex flex-col items-center gap-2 rounded-2xl border border-ink/10 bg-mist/60 px-4 py-8 text-center">
-                  <Loader2
-                    size={26}
-                    className="animate-spin text-primary"
-                  />
-
-                  <p className="text-sm font-semibold text-ink">
-                    Waiting for your new code…
-                  </p>
-
-                  <p className="text-xs leading-relaxed text-slate">
-                    We&rsquo;re checking automatically for the
-                    new email you requested.
-                  </p>
-
-                  <p className="text-xs text-slate">
-                    Please keep this page open.
-                  </p>
-                </div>
-              )}
-
-              {/* STEP 3 — FIVE-MINUTE TIMEOUT */}
-              {item.phase === "wait_timed_out" && (
-                <div className="flex flex-col items-center gap-2 rounded-2xl border border-ghRed/20 bg-ghRed/5 px-4 py-8 text-center">
-                  <Mail
-                    size={28}
-                    className="text-ghRed"
-                  />
-
-                  <p className="text-sm font-semibold text-ink">
-                    No new code arrived
-                  </p>
-
-                  <p className="text-xs leading-relaxed text-slate">
-                    We didn&rsquo;t detect a new email within
-                    5 minutes. Make sure you requested the
-                    sign-in code, then try again.
-                  </p>
-
-                  <button
-                    onClick={confirmRequested}
-                    disabled={confirming}
-                    className="btn-primary mt-2 inline-flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {confirming ? (
-                      <Loader2
-                        size={16}
-                        className="animate-spin"
-                      />
-                    ) : (
-                      <Send size={16} />
-                    )}
-
-                    {confirming
-                      ? "Trying again…"
-                      : "Try again"}
-                  </button>
-                </div>
-              )}
-
-              {/* STEP 4 — EMAIL REVEALED */}
-              {item.phase === "revealed" && (
-                <div className="overflow-hidden rounded-2xl border border-primary/15 bg-white shadow-sm">
-                  <div className="flex items-center justify-between gap-3 border-b border-ink/5 bg-gradient-to-r from-primary/5 to-transparent px-4 py-3">
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-                      <MailOpen
-                        size={16}
-                        className="text-primary"
-                      />
-
-                      Your instructions
-                    </span>
-
-                    {secondsLeft !== null && (
-                      <CountdownRing
-                        secondsLeft={secondsLeft}
-                        totalSeconds={totalSeconds}
-                      />
-                    )}
-                  </div>
-
-                  <div className="whitespace-pre-wrap px-4 py-4 font-mono text-sm leading-relaxed text-ink">
-                    {item.revealContent}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 border-t border-ink/5 bg-mist/60 px-4 py-2.5">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate">
-                      <Clock size={12} />
-
-                      {secondsLeft !== null &&
-                      secondsLeft <= 10
-                        ? "Closing fast — grab this now"
-                        : "This view closes automatically"}
-                    </span>
-
-                    <button
-                      onClick={copyContent}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white px-2.5 py-1 text-xs font-medium text-ink hover:bg-mist"
-                    >
-                      {copied ? (
-                        <Check
-                          size={13}
-                          className="text-ghGreen"
+              {/* -----------------------------------------
+                  CODE FOUND
+                 ----------------------------------------- */}
+              {item.phase === "revealed" &&
+                item.revealContent && (
+                  <div className="overflow-hidden rounded-2xl border border-primary/15 bg-white shadow-sm">
+                    <div className="flex items-center justify-between gap-3 border-b border-ink/5 bg-gradient-to-r from-primary/5 to-transparent px-4 py-3">
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                        <MailOpen
+                          size={16}
+                          className="text-primary"
                         />
-                      ) : (
-                        <Copy size={13} />
+
+                        Verification code
+                      </span>
+
+                      {secondsLeft !== null && (
+                        <CountdownRing
+                          secondsLeft={secondsLeft}
+                          totalSeconds={totalSeconds}
+                        />
+                      )}
+                    </div>
+
+                    <div className="px-4 py-5 text-center">
+                      {item.revealInstruction && (
+                        <p className="mb-3 text-sm leading-relaxed text-slate">
+                          {item.revealInstruction}
+                        </p>
                       )}
 
-                      {copied ? "Copied" : "Copy"}
-                    </button>
+                      <div className="rounded-xl bg-mist px-4 py-5">
+                        <p className="font-mono text-3xl font-bold tracking-[0.2em] text-ink">
+                          {item.revealContent}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 border-t border-ink/5 bg-mist/60 px-4 py-2.5">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-slate">
+                        <Clock size={12} />
+
+                        {secondsLeft !== null &&
+                        secondsLeft <= 10
+                          ? "Closing fast — grab this now"
+                          : "This code will disappear automatically"}
+                      </span>
+
+                      <button
+                        onClick={copyContent}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white px-2.5 py-1 text-xs font-medium text-ink hover:bg-mist"
+                      >
+                        {copied ? (
+                          <Check
+                            size={13}
+                            className="text-ghGreen"
+                          />
+                        ) : (
+                          <Copy size={13} />
+                        )}
+
+                        {copied ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+              {/* -----------------------------------------
+                  CODE NOT FOUND
+                 ----------------------------------------- */}
+              {item.phase === "not_found" && (
+                <div className="rounded-2xl border border-ghRed/20 bg-ghRed/5 p-5">
+                  <div className="flex items-start gap-3">
+                    <TriangleAlert
+                      size={20}
+                      className="mt-0.5 shrink-0 text-ghRed"
+                    />
+
+                    <div>
+                      <p className="text-sm font-bold text-ghRed">
+                        Code could not be retrieved
+                      </p>
+
+                      <p className="mt-2 text-sm leading-relaxed text-slate">
+                        The one-time Gmail check did not retrieve
+                        the verification code.
+                      </p>
+
+                      <p className="mt-2 text-xs leading-relaxed text-slate">
+                        Please contact support with your payment
+                        reference so the order can be checked.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* STEP 5 — REVEAL EXPIRED */}
+              {/* -----------------------------------------
+                  ALREADY CHECKED
+                 ----------------------------------------- */}
+              {(item.phase === "checked" ||
+                item.phase === "already_checked") && (
+                <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 rounded-full bg-primary/10 p-2">
+                      <CheckCircle2
+                        size={18}
+                        className="text-primary"
+                      />
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold text-ink">
+                        One-time code check used
+                      </p>
+
+                      <p className="mt-2 text-sm leading-relaxed text-slate">
+                        This purchase has already used its
+                        one-time verification code check.
+                      </p>
+
+                      <p className="mt-2 text-xs leading-relaxed text-slate">
+                        If you need assistance with your order,
+                        please contact support and provide your
+                        payment reference.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* -----------------------------------------
+                  EXPIRED
+                 ----------------------------------------- */}
               {item.phase === "expired" && (
-                <div className="flex flex-col items-center gap-2 rounded-2xl border border-ink/10 bg-mist/60 px-4 py-8 text-center">
-                  <Mail
-                    size={28}
-                    className="text-slate"
-                  />
+                <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
+                  <div className="flex items-start gap-3">
+                    <Clock
+                      size={20}
+                      className="mt-0.5 shrink-0 text-slate"
+                    />
 
-                  <p className="text-sm font-semibold text-ink">
-                    This reveal window has closed
-                  </p>
+                    <div>
+                      <p className="text-sm font-semibold text-ink">
+                        Code display expired
+                      </p>
 
-                  <p className="text-xs leading-relaxed text-slate">
-                    Contact support if you didn&rsquo;t get a
-                    chance to read the information.
-                  </p>
+                      <p className="mt-2 text-sm leading-relaxed text-slate">
+                        The verification code is no longer
+                        displayed. This purchase has already used
+                        its one-time code check.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -649,9 +738,23 @@ function DownloadInner() {
 
       {/* Error */}
       {state === "error" && (
-        <h1 className="text-xl font-bold">
-          We couldn&rsquo;t find that purchase.
-        </h1>
+        <>
+          <h1 className="text-xl font-bold">
+            Something went wrong
+          </h1>
+
+          <p className="mt-2 text-sm text-slate">
+            {errorMessage ||
+              "We couldn't load your purchase."}
+          </p>
+
+          <button
+            onClick={() => loadPurchase()}
+            className="btn-primary mt-4"
+          >
+            Try again
+          </button>
+        </>
       )}
     </div>
   );
@@ -664,4 +767,3 @@ export default function DownloadsPage() {
     </Suspense>
   );
 }
-
