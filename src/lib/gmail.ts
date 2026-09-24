@@ -303,3 +303,62 @@ export async function getLatestGmailTextAfter(
       continue;
     }
 
+    /**
+     * Ignore all emails that existed before the customer
+     * confirmed the request.
+     */
+    if (internalDate <= afterMs) {
+      continue;
+    }
+
+    newestNewEmailFound = true;
+
+    /**
+     * Extract only the plain-text email content needed for
+     * OTP detection.
+     */
+    const emailText =
+      extractText(msg.data.payload)?.trim() || "";
+
+    if (!emailText) {
+      continue;
+    }
+
+    /**
+     * Extract the OTP and a short instruction.
+     */
+    const otpData = extractOtpData(emailText);
+
+    if (otpData.code) {
+      return {
+        found: true,
+        instruction: otpData.instruction,
+        text: otpData.code,
+      };
+    }
+  }
+
+  /**
+   * At least one new email arrived, but none of the new
+   * messages contained a recognizable OTP/code.
+   */
+  if (newestNewEmailFound) {
+    return {
+      found: false,
+      instruction: null,
+      text: null,
+      reason: "code_not_found",
+    };
+  }
+
+  /**
+   * No email was received after the customer's confirmation
+   * timestamp.
+   */
+  return {
+    found: false,
+    instruction: null,
+    text: null,
+    reason: "no_new_email",
+  };
+}
