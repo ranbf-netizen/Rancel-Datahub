@@ -295,32 +295,29 @@ export async function getFirstGmailCodeAfter(
   candidates.sort((a, b) => a.internalDate - b.internalDate);
 
   /**
-   * Now inspect the new messages in chronological order, and only accept
-   * one that actually contains a recognizable code. This guarantees two
-   * things: the buyer is never shown a full raw email (just the code and a
-   * short instruction), and an unrelated new email (a promo, a receipt)
-   * can't get mistaken for the code just because it happened to arrive
-   * after the check started.
+   * Now inspect the new messages in chronological order.
+   *
+   * This guarantees that if several new emails arrived,
+   * we return the FIRST one containing a recognizable code.
    */
   for (const candidate of candidates) {
-    const msg = await gmail.users.messages.get({
-      userId: "me",
-      id: candidate.id,
-      format: "full",
-    });
+  const msg = await gmail.users.messages.get({
+    userId: "me",
+    id: candidate.id,
+    format: "full",
+  });
 
-    const emailText = extractText(msg.data.payload)?.trim() || "";
-    if (!emailText) continue;
+  const emailText =
+    extractText(msg.data.payload)?.trim() || "";
 
-    const { code, instruction } = extractOtpData(emailText);
-    if (!code) continue; // no recognizable code in this email - check the next candidate
+  if (!emailText) continue;
 
-    return {
-      found: true,
-      instruction,
-      text: code,
-    };
-  }
+  return {
+    found: true,
+    instruction: "Latest email received",
+    text: emailText,
+  };
+}
 
   return {
     found: false,
