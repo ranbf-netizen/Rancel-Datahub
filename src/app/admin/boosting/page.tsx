@@ -21,6 +21,18 @@ export default function AdminBoosting() {
   const [balance, setBalance] = useState<number | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+
+  async function syncStatuses() {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/admin/boosting/sync", { method: "POST" });
+      const d = await res.json();
+      if (res.ok) { alert(`Synced. ${d.updated} order(s) updated.`); load(); }
+      else alert(d.error || "Sync failed.");
+    } catch { alert("Sync failed."); }
+    setSyncing(false);
+  }
 
   function load() {
     setLoading(true);
@@ -49,6 +61,9 @@ export default function AdminBoosting() {
         </div>
         <button onClick={load} className="btn-secondary inline-flex items-center gap-2 !py-2 !text-sm">
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+        </button>
+        <button onClick={syncStatuses} disabled={syncing} className="btn-primary ml-2 inline-flex items-center gap-2 !py-2 !text-sm disabled:opacity-50">
+          <RefreshCw size={15} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync statuses"}
         </button>
       </div>
 

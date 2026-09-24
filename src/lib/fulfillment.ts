@@ -348,3 +348,32 @@ export async function fulfillBoostOrder(reference: string) {
   }
   return { found: true as const, alreadyProcessed: false as const };
 }
+
+// SMS number rental: on confirmed payment, rent the number from SMSPool.
+// Same prepaid-balance + refund-on-failure pattern as fulfillBoostOrder.
+export async function fulfillSmsOrder(reference: string) {
+  const order = await prisma.smsOrder.findUnique({ where: { paystackReference: reference } });
+  if (!order) return { found: false as const };
+  if (order.paymentStatus === "PAID") return { found: true as const, alreadyProcessed: true as const };
+  await prisma.smsOrder.update({ where: { paystackReference: reference }, data: { paymentStatus: "PAID" } });
+
+  try {
+    const { getSmsPoolBalance, orderSmsPoolNumber } = await import("@/lib/smspool");
+    const bal = await getSmsPoolBalance();
+    if (bal <= 0) throw new Error("SMSPool balance is empty.");
+    const result = await orderSmsPoolNumber({ countryId: order.countryId, serviceId: order.serviceId });
+    await prisma.smsOrder.update({
+      where: { id: order.id },
+      data: {
+        poolOrderId: result.orderId,
+        phoneNumber: result.number,
+        status: "WAITING",
+        expiresAt: new Date(Date.now() + result.expiresInSeconds * 1000),
+      },
+    });
+  } catch (err: any) {
+    await prisma.smsOrder.update({ where: { id: order.id }, data: { status: `FAILED: ${err.message}` } });
+    await prisma.refund.create({ data: { orderType: "digital", orderId: order.id, reason: `SMS number rental failed after payment: ${err.message}` } });
+  }
+  return { found: true as const, alreadyProcessed: false as const };
+}

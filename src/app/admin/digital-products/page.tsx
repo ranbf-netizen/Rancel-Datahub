@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Pencil } from "lucide-react";
 
 type Product = {
   id: string;
@@ -61,6 +61,44 @@ const EMPTY = {
 export default function AdminDigitalProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState({ ...EMPTY });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Load a product's values into the form for editing.
+  function startEdit(p: any) {
+    setEditingId(p.id);
+    setForm({
+      ...EMPTY,
+      title: p.title ?? "",
+      description: p.description ?? "",
+      instructions: p.instructions ?? "",
+      category: p.category ?? "",
+      price: p.price != null ? String(p.price) : "",
+      stock: p.stock != null ? String(p.stock) : "",
+      coverUrl: p.coverUrl ?? "",
+      productType: p.productType ?? "DIGITAL",
+      deliveryType: p.deliveryType ?? "DOWNLOAD",
+      fileUrl: p.fileUrl ?? "",
+      revealContent: p.revealContent ?? "",
+      platform: p.platform ?? "Instagram",
+      quantity: p.quantity ?? "",
+      deliveryEstimate: p.deliveryEstimate ?? "",
+      requirements: p.requirements ?? "",
+      smmServiceId: p.smmServiceId != null ? String(p.smmServiceId) : "",
+      smmQuantity: p.smmQuantity != null ? String(p.smmQuantity) : "",
+      deliveryMethods: p.deliveryMethods ?? "DIGITAL",
+      requireWhatsapp: p.requireWhatsapp ? "1" : "",
+      optionsJson: p.optionsJson ?? "",
+      featured: p.featured ? "1" : "",
+      instantDelivery: p.instantDelivery ? "1" : "",
+    });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm({ ...EMPTY });
+    setError("");
+  }
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -159,11 +197,11 @@ export default function AdminDigitalProducts() {
     setAdding(true);
 
     const res = await fetch("/api/admin/digital-products", {
-      method: "POST",
+      method: editingId ? "PATCH" : "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(form),
+      body: JSON.stringify(editingId ? { id: editingId, ...form } : form),
     });
 
     const data = await res.json();
@@ -171,10 +209,11 @@ export default function AdminDigitalProducts() {
     setAdding(false);
 
     if (!res.ok) {
-      setError(data.error || "Could not add.");
+      setError(data.error || (editingId ? "Could not save." : "Could not add."));
       return;
     }
 
+    setEditingId(null);
     setForm({ ...EMPTY });
     load();
   }
@@ -786,8 +825,13 @@ export default function AdminDigitalProducts() {
             />
           )}
 
-          {adding ? "Adding…" : "Add Product"}
+          {adding ? (editingId ? "Saving…" : "Adding…") : (editingId ? "Save changes" : "Add Product")}
         </button>
+        {editingId && (
+          <button type="button" onClick={cancelEdit} className="btn-secondary ml-2 !py-2 !text-sm">
+            Cancel edit
+          </button>
+        )}
       </form>
 
       <div className="mt-8 overflow-x-auto">
@@ -880,14 +924,24 @@ export default function AdminDigitalProducts() {
                 </td>
 
                 <td>
-                  <button
-                    type="button"
-                    onClick={() => remove(p.id)}
-                    className="inline-flex items-center gap-1 rounded-md border border-ghRed/30 px-2 py-1 text-xs text-ghRed hover:bg-ghRed/5"
-                  >
-                    <Trash2 size={13} />
-                    Delete
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(p)}
+                      className="inline-flex items-center gap-1 rounded-md border border-ink/15 px-2 py-1 text-xs hover:bg-mist"
+                    >
+                      <Pencil size={13} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(p.id)}
+                      className="inline-flex items-center gap-1 rounded-md border border-ghRed/30 px-2 py-1 text-xs text-ghRed hover:bg-ghRed/5"
+                    >
+                      <Trash2 size={13} />
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

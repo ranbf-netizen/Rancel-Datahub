@@ -177,10 +177,18 @@ export async function GET(req: NextRequest) {
 
     const elapsedMs = Date.now() - startedAt;
 
+    // Keep the response TINY — cron-job.org rejects large responses
+    // ("output too large"). Return only counts, not the full results array.
+    const resolved = results.filter(
+      (r: any) => typeof r === "string"
+        ? (r.startsWith("resolved") || r === "fulfilled")
+        : (r?.outcome ? String(r.outcome).startsWith("resolved") || r.outcome === "fulfilled" : false)
+    ).length;
+
     return NextResponse.json({
       success: true,
       checked: results.length,
-      results,
+      resolved,
       elapsedMs,
       remaining:
         jobs.length > results.length

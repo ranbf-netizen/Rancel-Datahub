@@ -4,32 +4,38 @@ import { getFirstGmailCodeAfter } from "@/lib/gmail";
 
 export const dynamic = "force-dynamic";
 
+// How long one "attempt" keeps polling for a fresh code before giving up.
+// This used to be a single blocking 45-second wait inside one request -
+// risky on serverless hosts (Vercel kills long-running functions), and too
+// short for emails that take a minute or more. Now each request does ONE
+// quick Gmail check and returns immediately; the FRONTEND polls this route
+// every few seconds, so the effective wait time (this constant) can safely
+// be much longer without ever risking a platform timeout.
+const WAIT_WINDOW_SECONDS = 180;
+
+// A buyer gets this many total attempts (first check + retries) before the
+// purchase is permanently done. Bounded so nobody can hammer this endpoint
+// indefinitely fishing for a code, but generous enough that one mistimed or
+// slow email doesn't strand a paying customer.
+const MAX_ATTEMPTS = 3;
+
 export async function GET(req: NextRequest) {
   const reference = req.nextUrl.searchParams.get("ref");
   const checkCode = req.nextUrl.searchParams.get("checkCode") === "1";
+  const retry = req.nextUrl.searchParams.get("retry") === "1";
 
   if (!reference) {
-    return NextResponse.json(
-      { error: "Missing reference." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Missing reference." }, { status: 400 });
   }
 
   try {
     const purchase = await prisma.digitalPurchase.findUnique({
-      where: {
-        paystackReference: reference,
-      },
-      include: {
-        product: true,
-      },
+      where: { paystackReference: reference },
+      include: { product: true },
     });
 
     if (!purchase) {
-      return NextResponse.json(
-        { error: "Purchase not found." },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Purchase not found." }, { status: 404 });
     }
 
     if (purchase.paymentStatus !== "PAID") {
@@ -39,245 +45,167 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // -----------------------------------------
-    // GMAIL LATEST
-    // -----------------------------------------
     if (purchase.product.deliveryType === "GMAIL_LATEST") {
-      return handleGmailDelivery(purchase, checkCode);
+      return handleGmailDelivery(purchase, checkCode, retry);
     }
 
-    // -----------------------------------------
-    // NORMAL DIGITAL PRODUCT
-    // -----------------------------------------
     return NextResponse.json({
       status: "paid",
       title: purchase.product.title,
       fileUrl: purchase.product.fileUrl,
       deliveryType: purchase.product.deliveryType,
-      revealContent:
-        purchase.product.deliveryType === "REVEAL"
-          ? purchase.product.revealContent
-          : null,
+      revealContent: purchase.product.deliveryType === "REVEAL" ? purchase.product.revealContent : null,
     });
   } catch (error: any) {
     console.error("DOWNLOAD ERROR:", error);
-
     return NextResponse.json(
-      {
-        error:
-          error?.message ||
-          "Something went wrong while loading your purchase.",
-      },
+      { error: error?.message || "Something went wrong while loading your purchase." },
       { status: 500 }
     );
   }
 }
 
-async function handleGmailDelivery(
-  purchase: any,
-  checkCode: boolean
-) {
+async function handleGmailDelivery(purchase: any, checkCode: boolean, retry: boolean) {
   const product = purchase.product;
   const windowSeconds = product.gmailRevealSeconds || 60;
 
-  // -----------------------------------------
-  // Just opening the page
-  // -----------------------------------------
+  // Just opening the page - quick summary, no Gmail call.
   if (!checkCode) {
     return NextResponse.json({
       status: "paid",
       title: product.title,
       deliveryType: "GMAIL_LATEST",
       gmailAddress: product.gmailAddress || null,
-      phase: purchase.confirmedAt ? "checked" : "ready",
+      phase: purchase.confirmedAt ? "checking" : "ready",
     });
   }
 
-  // -----------------------------------------
-  // ONE-TIME CHECK
-  // -----------------------------------------
-  //
-  // confirmedAt is now used as the permanent
-  // "this purchase has already used its Gmail check"
-  // marker.
-  //
-  // Once this is set, this purchase can NEVER perform
-  // another Gmail check.
-  //
-  if (purchase.confirmedAt) {
-    // If a code was already successfully revealed,
-    // allow the customer to see that saved code while
-    // its display window is still active.
-    if (purchase.revealStartedAt && purchase.revealedGmailText) {
-      const elapsedSeconds = Math.floor(
-        (Date.now() - purchase.revealStartedAt.getTime()) / 1000
-      );
+  // A code was already found on a previous poll - just report its remaining
+  // display time. Terminal state, ignores retry.
+  if (purchase.revealStartedAt && purchase.revealedGmailText) {
+    const elapsedSeconds = Math.floor((Date.now() - purchase.revealStartedAt.getTime()) / 1000);
+    const secondsRemaining = Math.max(0, windowSeconds - elapsedSeconds);
+    if (secondsRemaining > 0) {
+      return NextResponse.json({
+        status: "paid",
+        title: product.title,
+        deliveryType: "GMAIL_LATEST",
+        gmailAddress: product.gmailAddress || null,
+        phase: "revealed",
+        revealInstruction: purchase.revealedGmailInstruction || "Use this code to complete your sign-in.",
+        revealContent: purchase.revealedGmailText,
+        secondsRemaining,
+        totalSeconds: windowSeconds,
+      });
+    }
+    return NextResponse.json({
+      status: "paid",
+      title: product.title,
+      deliveryType: "GMAIL_LATEST",
+      gmailAddress: product.gmailAddress || null,
+      phase: "expired",
+    });
+  }
 
-      const secondsRemaining = Math.max(
-        0,
-        windowSeconds - elapsedSeconds
-      );
+  const now = Date.now();
 
-      if (secondsRemaining > 0) {
-        return NextResponse.json({
-          status: "paid",
-          title: product.title,
-          deliveryType: "GMAIL_LATEST",
-          gmailAddress: product.gmailAddress || null,
-          phase: "revealed",
-          revealInstruction:
-            purchase.revealedGmailInstruction ||
-            "Use this code to complete your sign-in.",
-          revealContent: purchase.revealedGmailText,
-          secondsRemaining,
-          totalSeconds: windowSeconds,
-        });
+  // First attempt ever for this purchase: claim it atomically so two
+  // simultaneous requests can't both start a fresh cutoff.
+  if (!purchase.confirmedAt) {
+    if (purchase.checkAttempts >= MAX_ATTEMPTS) {
+      return NextResponse.json({
+        status: "paid", title: product.title, deliveryType: "GMAIL_LATEST",
+        gmailAddress: product.gmailAddress || null, phase: "not_found_final",
+      });
+    }
+    const claimed = await prisma.digitalPurchase.updateMany({
+      where: { id: purchase.id, confirmedAt: null },
+      data: { confirmedAt: new Date(now), checkAttempts: { increment: 1 } },
+    });
+    if (claimed.count === 1) {
+      purchase.confirmedAt = new Date(now);
+      purchase.checkAttempts += 1;
+    } else {
+      // Lost the race to another request for the same purchase - re-read
+      // the row so we act on whatever actually got committed.
+      const fresh = await prisma.digitalPurchase.findUnique({ where: { id: purchase.id } });
+      if (fresh) Object.assign(purchase, fresh);
+    }
+  } else if (retry) {
+    // Explicit "try again" - only allowed once the previous attempt's
+    // window has genuinely run out, nothing was ever revealed, and there
+    // are attempts left.
+    const windowOverMs = now - new Date(purchase.confirmedAt).getTime();
+    const canRetry = windowOverMs > WAIT_WINDOW_SECONDS * 1000 && purchase.checkAttempts < MAX_ATTEMPTS && !purchase.revealStartedAt;
+    if (canRetry) {
+      const claimed = await prisma.digitalPurchase.updateMany({
+        where: { id: purchase.id, revealStartedAt: null, checkAttempts: { lt: MAX_ATTEMPTS } },
+        data: { confirmedAt: new Date(now), checkAttempts: { increment: 1 } },
+      });
+      if (claimed.count === 1) {
+        purchase.confirmedAt = new Date(now);
+        purchase.checkAttempts += 1;
       }
     }
-
-    return NextResponse.json({
-      status: "paid",
-      title: product.title,
-      deliveryType: "GMAIL_LATEST",
-      gmailAddress: product.gmailAddress || null,
-      phase: "already_checked",
-      message:
-        "This purchase has already used its one-time code check.",
-    });
   }
+  // Otherwise: this is just a routine poll against the existing cutoff -
+  // nothing to claim, fall through to checking Gmail below.
 
-  // -----------------------------------------
-  // Record the exact moment this customer
-  // started their one-time code check.
-  // -----------------------------------------
-  const checkStartedAt = Date.now();
+  const cutoffMs = new Date(purchase.confirmedAt).getTime();
+  const elapsedSeconds = (now - cutoffMs) / 1000;
 
-  // -----------------------------------------
-  // Claim the one-time check atomically.
-  //
-  // This prevents two simultaneous requests from
-  // both getting a Gmail check for the same purchase.
-  // -----------------------------------------
-  const claimed = await prisma.digitalPurchase.updateMany({
-    where: {
-      id: purchase.id,
-      confirmedAt: null,
-    },
-    data: {
-      confirmedAt: new Date(checkStartedAt),
-    },
-  });
-
-  if (claimed.count !== 1) {
-    return NextResponse.json({
-      status: "paid",
-      title: product.title,
-      deliveryType: "GMAIL_LATEST",
-      gmailAddress: product.gmailAddress || null,
-      phase: "already_checked",
-      message:
-        "This purchase has already used its one-time code check.",
-    });
-  }
-
-  // -----------------------------------------
-  // Wait for the new Gmail code.
-  //
-  // The customer only gets ONE attempt, but the
-  // server gives Gmail some time for Netflix's
-  // email to arrive.
-  //
-  // Maximum wait: 45 seconds.
-  // -----------------------------------------
-  const maxWaitMs = 45_000;
-  const pollIntervalMs = 3_000;
-
-  const deadline = Date.now() + maxWaitMs;
-
-  let result: {
-    found: boolean;
-    instruction: string | null;
-    text: string | null;
-  } = {
-    found: false,
-    instruction: null,
-    text: null,
-  };
-
-  while (Date.now() < deadline) {
-    result = await getFirstGmailCodeAfter(
-      product.gmailLabel || undefined,
-      checkStartedAt
+  let result: { found: boolean; instruction: string | null; text: string | null };
+  try {
+    result = await getFirstGmailCodeAfter(product.gmailLabel || undefined, cutoffMs);
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Could not check for your code right now." },
+      { status: 502 }
     );
-
-    if (result.found && result.text) {
-      break;
-    }
-
-    await sleep(pollIntervalMs);
   }
 
-  // -----------------------------------------
-  // No matching code arrived during the
-  // one-time checking window.
-  //
-  // IMPORTANT:
-  // confirmedAt remains set.
-  // The customer cannot try again with this
-  // purchase.
-  // -----------------------------------------
-  if (!result.found || !result.text) {
+  if (result.found && result.text) {
+    const revealStartedAt = new Date();
+    await prisma.digitalPurchase.update({
+      where: { id: purchase.id },
+      data: {
+        revealStartedAt,
+        revealedGmailInstruction: result.instruction || "Use this code to complete your sign-in.",
+        revealedGmailText: result.text,
+      },
+    });
     return NextResponse.json({
       status: "paid",
       title: product.title,
       deliveryType: "GMAIL_LATEST",
       gmailAddress: product.gmailAddress || null,
-      phase: "not_found",
-      message:
-        "The verification code could not be retrieved during this one-time check. Please contact support.",
+      phase: "revealed",
+      revealInstruction: result.instruction || "Use this code to complete your sign-in.",
+      revealContent: result.text,
+      secondsRemaining: windowSeconds,
+      totalSeconds: windowSeconds,
     });
   }
 
-  // -----------------------------------------
-  // Code found.
-  // Save it against this purchase.
-  // -----------------------------------------
-  const revealStartedAt = new Date();
-
-  await prisma.digitalPurchase.update({
-    where: {
-      id: purchase.id,
-    },
-    data: {
-      revealStartedAt,
-      revealedGmailInstruction:
-        result.instruction ||
-        "Use this code to complete your sign-in.",
-      revealedGmailText: result.text,
-    },
-  });
+  if (elapsedSeconds > WAIT_WINDOW_SECONDS) {
+    const attemptsRemaining = MAX_ATTEMPTS - purchase.checkAttempts;
+    return NextResponse.json({
+      status: "paid",
+      title: product.title,
+      deliveryType: "GMAIL_LATEST",
+      gmailAddress: product.gmailAddress || null,
+      phase: attemptsRemaining > 0 ? "not_found" : "not_found_final",
+      attemptsRemaining,
+    });
+  }
 
   return NextResponse.json({
     status: "paid",
     title: product.title,
     deliveryType: "GMAIL_LATEST",
     gmailAddress: product.gmailAddress || null,
-    phase: "revealed",
-    revealInstruction:
-      result.instruction ||
-      "Use this code to complete your sign-in.",
-    revealContent: result.text,
-    secondsRemaining: windowSeconds,
-    totalSeconds: windowSeconds,
-  });
-}
-
-/**
- * Small delay used while waiting for Gmail to receive
- * the Netflix verification email.
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    phase: "waiting",
+    secondsWaited: Math.floor(elapsedSeconds),
+    maxWaitSeconds: WAIT_WINDOW_SECONDS,
   });
 }

@@ -19,6 +19,7 @@ model User {
   afaOrders    AfaOrder[]
   agentProfile AgentProfile?
   boostOrders  BoostOrder[]
+  smsOrders    SmsOrder[]
   dataOrders   DataOrder[]
   pinOrders    PinOrder[]
 }
@@ -239,6 +240,7 @@ model DigitalPurchase {
   revealedGmailInstruction String?
   revealedGmailText       String?
   confirmedAt             DateTime?
+  checkAttempts           Int            @default(0)
   chosenOption             String?
   deliveryMethod           String?
   whatsapp                 String?
@@ -333,3 +335,25 @@ enum AgentTransactionStatus {
   FAILED
 }
 
+
+// A customer's SMS-number rental (SMSPool). Same prepaid-balance +
+// auto-refund-on-failure pattern as BoostOrder.
+model SmsOrder {
+  id                String    @id @default(uuid())
+  userId            String
+  countryId         String
+  countryName       String
+  serviceId         String
+  serviceName       String
+  amount            Float
+  paystackReference String    @unique
+  paymentStatus     String    @default("PENDING")
+  poolOrderId       String?
+  phoneNumber       String?
+  smsCode           String?
+  fullSms           String?
+  status            String    @default("PENDING") // PENDING, WAITING, RECEIVED, EXPIRED, or FAILED: <reason>
+  expiresAt         DateTime?
+  createdAt         DateTime  @default(now())
+  user              User      @relation(fields: [userId], references: [id])
+}
