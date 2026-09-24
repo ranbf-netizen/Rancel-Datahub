@@ -301,29 +301,23 @@ export async function getFirstGmailCodeAfter(
    * we return the FIRST one containing a recognizable code.
    */
   for (const candidate of candidates) {
-    const msg = await gmail.users.messages.get({
-      userId: "me",
-      id: candidate.id,
-      format: "full",
-    });
+  const msg = await gmail.users.messages.get({
+    userId: "me",
+    id: candidate.id,
+    format: "full",
+  });
 
-    const emailText =
-      extractText(msg.data.payload)?.trim() || "";
+  const emailText =
+    extractText(msg.data.payload)?.trim() || "";
 
-    if (!emailText) continue;
+  if (!emailText) continue;
 
-    const otpData = extractOtpData(emailText);
-
-    if (!otpData.code) continue;
-
-    return {
-      found: true,
-      instruction:
-        otpData.instruction ||
-        "Use this code to complete your sign-in.",
-      text: otpData.code,
-    };
-  }
+  return {
+    found: true,
+    instruction: "Latest email received",
+    text: emailText,
+  };
+}
 
   return {
     found: false,
