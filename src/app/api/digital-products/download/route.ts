@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getLatestGmailTextAfter } from "@/lib/gmail";
+import { getFirstGmailCodeAfter } from "@/lib/gmail";
 
 export const dynamic = "force-dynamic";
 
-// How long we wait for a NEW Gmail email after the customer confirms
-// that they have requested the sign-in code.
-const WAIT_WINDOW_SECONDS = 300;
-
 export async function GET(req: NextRequest) {
   const reference = req.nextUrl.searchParams.get("ref");
+  const checkCode = req.nextUrl.searchParams.get("checkCode") === "1";
 
   if (!reference) {
     return NextResponse.json(
@@ -18,230 +15,269 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const purchase = await prisma.digitalPurchase.findUnique({
-    where: { paystackReference: reference },
-    include: { product: true },
-  });
-
-  if (!purchase) {
-    return NextResponse.json(
-      { error: "Purchase not found." },
-      { status: 404 }
-    );
-  }
-
-  if (purchase.paymentStatus !== "PAID") {
-    return NextResponse.json({
-      status: "pending",
-      message: "Payment not confirmed yet. Refresh in a moment.",
+  try {
+    const purchase = await prisma.digitalPurchase.findUnique({
+      where: {
+        paystackReference: reference,
+      },
+      include: {
+        product: true,
+      },
     });
-  }
 
-  // Gmail latest-email delivery
-  if (purchase.product.deliveryType === "GMAIL_LATEST") {
-    return handleGmailReveal(purchase);
-  }
+    if (!purchase) {
+      return NextResponse.json(
+        { error: "Purchase not found." },
+        { status: 404 }
+      );
+    }
 
-  // Normal digital delivery
-  return NextResponse.json({
-    status: "paid",
-    title: purchase.product.title,
-    fileUrl: purchase.product.fileUrl,
-    deliveryType: purchase.product.deliveryType,
-    revealContent:
-      purchase.product.deliveryType === "REVEAL"
-        ? purchase.product.revealContent
-        : null,
-  });
-}
-
-/**
- * Handles the complete GMAIL_LATEST flow.
- *
- * Flow:
- *
- * 1. Customer has not confirmed yet
- *    -> show Gmail address + checkbox
- *
- * 2. Customer confirms
- *    -> backend starts checking for a NEW email
- *
- * 3. No email yet
- *    -> frontend keeps polling
- *
- * 4. New email arrives with a code
- *    -> cache instruction + code and start reveal countdown
- *
- * 5. Countdown expires
- *    -> instruction + code are no longer returned
- *
- * 6. Five-minute waiting period expires
- *    -> customer gets "Try again"
- */
-async function handleGmailReveal(purchase: any) {
-  const windowSeconds = purchase.product.gmailRevealSeconds || 60;
-  const now = new Date();
-
-  /**
-   * STEP 1
-   *
-   * Customer has not yet confirmed that they requested
-   * the sign-in code.
-   */
-  if (!purchase.confirmedAt) {
-    return NextResponse.json({
-      status: "paid",
-      title: purchase.product.title,
-      deliveryType: "GMAIL_LATEST",
-      phase: "awaiting_confirmation",
-
-      // Gmail address configured for this product.
-      gmailAddress: purchase.product.gmailAddress || null,
-    });
-  }
-
-  /**
-   * STEP 2
-   *
-   * Customer has confirmed.
-   *
-   * If a code has already been revealed, return the cached
-   * code while the server-side reveal window is still active.
-   */
-  if (purchase.revealStartedAt) {
-    const elapsedSeconds = Math.floor(
-      (now.getTime() - purchase.revealStartedAt.getTime()) / 1000
-    );
-
-    const secondsRemaining = Math.max(
-      0,
-      windowSeconds - elapsedSeconds
-    );
-
-    if (
-      secondsRemaining > 0 &&
-      purchase.revealedGmailText
-    ) {
+    if (purchase.paymentStatus !== "PAID") {
       return NextResponse.json({
-        status: "paid",
-        title: purchase.product.title,
-        deliveryType: "GMAIL_LATEST",
-        phase: "revealed",
-        revealInstruction:
-          purchase.revealedGmailInstruction ||
-          "Use this code to complete your sign-in or verification.",
-        revealContent: purchase.revealedGmailText,
-        secondsRemaining,
-        totalSeconds: windowSeconds,
-        expired: false,
+        status: "pending",
+        message: "Payment not confirmed yet. Refresh in a moment.",
       });
     }
 
-    // Reveal window has expired.
+    // -----------------------------------------
+    // GMAIL LATEST
+    // -----------------------------------------
+    if (purchase.product.deliveryType === "GMAIL_LATEST") {
+      return handleGmailDelivery(purchase, checkCode);
+    }
+
+    // -----------------------------------------
+    // NORMAL DIGITAL PRODUCT
+    // -----------------------------------------
     return NextResponse.json({
       status: "paid",
       title: purchase.product.title,
+      fileUrl: purchase.product.fileUrl,
+      deliveryType: purchase.product.deliveryType,
+      revealContent:
+        purchase.product.deliveryType === "REVEAL"
+          ? purchase.product.revealContent
+          : null,
+    });
+  } catch (error: any) {
+    console.error("DOWNLOAD ERROR:", error);
+
+    return NextResponse.json(
+      {
+        error:
+          error?.message ||
+          "Something went wrong while loading your purchase.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+async function handleGmailDelivery(
+  purchase: any,
+  checkCode: boolean
+) {
+  const product = purchase.product;
+  const windowSeconds = product.gmailRevealSeconds || 60;
+
+  // -----------------------------------------
+  // Just opening the page
+  // -----------------------------------------
+  if (!checkCode) {
+    return NextResponse.json({
+      status: "paid",
+      title: product.title,
       deliveryType: "GMAIL_LATEST",
-      phase: "expired",
-      revealInstruction: null,
-      revealContent: null,
-      secondsRemaining: 0,
-      totalSeconds: windowSeconds,
-      expired: true,
+      gmailAddress: product.gmailAddress || null,
+      phase: purchase.confirmedAt ? "checked" : "ready",
     });
   }
 
-  /**
-   * STEP 3
-   *
-   * We have a confirmedAt timestamp but have not found
-   * a qualifying new email yet.
-   */
-  const waitedSeconds = Math.floor(
-    (now.getTime() - purchase.confirmedAt.getTime()) / 1000
-  );
+  // -----------------------------------------
+  // ONE-TIME CHECK
+  // -----------------------------------------
+  //
+  // confirmedAt is now used as the permanent
+  // "this purchase has already used its Gmail check"
+  // marker.
+  //
+  // Once this is set, this purchase can NEVER perform
+  // another Gmail check.
+  //
+  if (purchase.confirmedAt) {
+    // If a code was already successfully revealed,
+    // allow the customer to see that saved code while
+    // its display window is still active.
+    if (purchase.revealStartedAt && purchase.revealedGmailText) {
+      const elapsedSeconds = Math.floor(
+        (Date.now() - purchase.revealStartedAt.getTime()) / 1000
+      );
 
-  // Five-minute waiting window has expired.
-  if (waitedSeconds >= WAIT_WINDOW_SECONDS) {
-    return NextResponse.json({
-      status: "paid",
-      title: purchase.product.title,
-      deliveryType: "GMAIL_LATEST",
-      phase: "wait_timed_out",
-      message: "No new code arrived.",
-      gmailAddress: purchase.product.gmailAddress || null,
-      secondsRemaining: 0,
-    });
-  }
-
-  /**
-   * STEP 4
-   *
-   * Check Gmail only for emails received AFTER confirmedAt.
-   */
-  const result = await getLatestGmailTextAfter(
-    purchase.product.gmailLabel || undefined,
-    purchase.confirmedAt.getTime()
-  );
-
-  /**
-   * STEP 5
-   *
-   * No qualifying email has arrived yet.
-   */
-  if (!result.found) {
-    return NextResponse.json({
-      status: "paid",
-      title: purchase.product.title,
-      deliveryType: "GMAIL_LATEST",
-      phase:
-        result.reason === "code_not_found"
-          ? "code_not_found"
-          : "waiting",
-      message:
-        result.reason === "code_not_found"
-          ? "A new email arrived, but no verification code was found."
-          : "Waiting for a new code.",
-      gmailAddress: purchase.product.gmailAddress || null,
-      secondsRemaining: Math.max(
+      const secondsRemaining = Math.max(
         0,
-        WAIT_WINDOW_SECONDS - waitedSeconds
-      ),
+        windowSeconds - elapsedSeconds
+      );
+
+      if (secondsRemaining > 0) {
+        return NextResponse.json({
+          status: "paid",
+          title: product.title,
+          deliveryType: "GMAIL_LATEST",
+          gmailAddress: product.gmailAddress || null,
+          phase: "revealed",
+          revealInstruction:
+            purchase.revealedGmailInstruction ||
+            "Use this code to complete your sign-in.",
+          revealContent: purchase.revealedGmailText,
+          secondsRemaining,
+          totalSeconds: windowSeconds,
+        });
+      }
+    }
+
+    return NextResponse.json({
+      status: "paid",
+      title: product.title,
+      deliveryType: "GMAIL_LATEST",
+      gmailAddress: product.gmailAddress || null,
+      phase: "already_checked",
+      message:
+        "This purchase has already used its one-time code check.",
     });
   }
 
-  /**
-   * STEP 6
-   *
-   * A valid OTP/code was found.
-   *
-   * Cache it so repeated polling does not keep fetching
-   * Gmail or replace the code during the reveal window.
-   */
-  const revealStartedAt = now;
+  // -----------------------------------------
+  // Record the exact moment this customer
+  // started their one-time code check.
+  // -----------------------------------------
+  const checkStartedAt = Date.now();
+
+  // -----------------------------------------
+  // Claim the one-time check atomically.
+  //
+  // This prevents two simultaneous requests from
+  // both getting a Gmail check for the same purchase.
+  // -----------------------------------------
+  const claimed = await prisma.digitalPurchase.updateMany({
+    where: {
+      id: purchase.id,
+      confirmedAt: null,
+    },
+    data: {
+      confirmedAt: new Date(checkStartedAt),
+    },
+  });
+
+  if (claimed.count !== 1) {
+    return NextResponse.json({
+      status: "paid",
+      title: product.title,
+      deliveryType: "GMAIL_LATEST",
+      gmailAddress: product.gmailAddress || null,
+      phase: "already_checked",
+      message:
+        "This purchase has already used its one-time code check.",
+    });
+  }
+
+  // -----------------------------------------
+  // Wait for the new Gmail code.
+  //
+  // The customer only gets ONE attempt, but the
+  // server gives Gmail some time for Netflix's
+  // email to arrive.
+  //
+  // Maximum wait: 45 seconds.
+  // -----------------------------------------
+  const maxWaitMs = 45_000;
+  const pollIntervalMs = 3_000;
+
+  const deadline = Date.now() + maxWaitMs;
+
+  let result: {
+    found: boolean;
+    instruction: string | null;
+    text: string | null;
+  } = {
+    found: false,
+    instruction: null,
+    text: null,
+  };
+
+  while (Date.now() < deadline) {
+    result = await getFirstGmailCodeAfter(
+      product.gmailLabel || undefined,
+      checkStartedAt
+    );
+
+    if (result.found && result.text) {
+      break;
+    }
+
+    await sleep(pollIntervalMs);
+  }
+
+  // -----------------------------------------
+  // No matching code arrived during the
+  // one-time checking window.
+  //
+  // IMPORTANT:
+  // confirmedAt remains set.
+  // The customer cannot try again with this
+  // purchase.
+  // -----------------------------------------
+  if (!result.found || !result.text) {
+    return NextResponse.json({
+      status: "paid",
+      title: product.title,
+      deliveryType: "GMAIL_LATEST",
+      gmailAddress: product.gmailAddress || null,
+      phase: "not_found",
+      message:
+        "The verification code could not be retrieved during this one-time check. Please contact support.",
+    });
+  }
+
+  // -----------------------------------------
+  // Code found.
+  // Save it against this purchase.
+  // -----------------------------------------
+  const revealStartedAt = new Date();
 
   await prisma.digitalPurchase.update({
-    where: { id: purchase.id },
+    where: {
+      id: purchase.id,
+    },
     data: {
       revealStartedAt,
       revealedGmailInstruction:
         result.instruction ||
-        "Use this code to complete your sign-in or verification.",
+        "Use this code to complete your sign-in.",
       revealedGmailText: result.text,
     },
   });
 
   return NextResponse.json({
     status: "paid",
-    title: purchase.product.title,
+    title: product.title,
     deliveryType: "GMAIL_LATEST",
+    gmailAddress: product.gmailAddress || null,
     phase: "revealed",
     revealInstruction:
       result.instruction ||
-      "Use this code to complete your sign-in or verification.",
+      "Use this code to complete your sign-in.",
     revealContent: result.text,
     secondsRemaining: windowSeconds,
     totalSeconds: windowSeconds,
-    expired: false,
+  });
+}
+
+/**
+ * Small delay used while waiting for Gmail to receive
+ * the Netflix verification email.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
   });
 }

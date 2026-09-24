@@ -111,16 +111,7 @@ function extractOtpData(text: string): {
     .trim();
 
   /**
-   * We look for the OTP close to common verification phrases.
-   *
-   * Supported examples:
-   *
-   * "Your verification code is 123456"
-   * "Verification code: 123456"
-   * "Your security code is ABC123"
-   * "Sign-in code: 123456"
-   * "Use 123456 to sign in"
-   * "Enter 123456 to continue"
+   * Look for OTPs close to common verification phrases.
    */
   const codePatterns = [
     /(?:your\s+)?(?:verification|security|sign[\s-]?in|login|confirmation)\s+code\s+(?:is\s+)?[:\-]?\s*([A-Z0-9]{4,12})\b/i,
@@ -221,46 +212,34 @@ export async function getLatestGmailText(
 }
 
 /**
- * Check for a NEW Gmail email received after `afterMs`.
+ * Find the FIRST matching Gmail code received after `afterMs`.
  *
- * Possible results:
+ * This is the function used by the one-time GMAIL_LATEST delivery flow.
  *
- * 1. no_new_email
- *    No email has arrived after the customer's confirmation time.
- *
- * 2. code_not_found
- *    A new email arrived, but no recognizable OTP/code was found.
- *
- * 3. found
- *    A new email arrived and a recognizable OTP/code was found.
- *
- * Only the extracted instruction and OTP/code are returned.
- *
- * The full Gmail message is NEVER returned by this function.
+ * IMPORTANT:
+ * - `afterMs` should be captured immediately before the system
+ *   starts waiting for the customer's new code.
+ * - Older emails are ignored.
+ * - Messages are sorted by Gmail's received timestamp.
+ * - The EARLIEST matching new code is returned.
+ * - Only the code and short instruction are returned.
+ * - The full email is NEVER returned.
  */
-export async function getLatestGmailTextAfter(
+export async function getFirstGmailCodeAfter(
   label: string | null | undefined,
   afterMs: number
 ): Promise<{
   found: boolean;
   instruction: string | null;
   text: string | null;
-  reason?: "no_new_email" | "code_not_found";
 }> {
   const gmail = getGmailClient();
 
   const q = label ? `label:${label}` : "";
 
-  /**
-   * Request several messages instead of only one.
-   *
-   * This allows us to ignore a newer irrelevant email and
-   * continue looking for another newly received email that
-   * contains the actual verification code.
-   */
   const list = await gmail.users.messages.list({
     userId: "me",
-    maxResults: 10,
+    maxResults: 20,
     q,
   });
 
@@ -271,94 +250,84 @@ export async function getLatestGmailTextAfter(
       found: false,
       instruction: null,
       text: null,
-      reason: "no_new_email",
     };
   }
 
   /**
-   * Track whether at least one genuinely new email exists.
+   * First collect the received timestamps.
+   *
+   * Gmail normally returns messages newest-first, but we do NOT
+   * rely on that ordering. We explicitly sort by internalDate.
    */
-  let newestNewEmailFound = false;
+  const candidates: {
+    id: string;
+    internalDate: number;
+  }[] = [];
 
   for (const message of messages) {
-    const messageId = message.id;
-
-    if (!messageId) {
-      continue;
-    }
+    if (!message.id) continue;
 
     const msg = await gmail.users.messages.get({
       userId: "me",
-      id: messageId,
+      id: message.id,
+      format: "metadata",
+    });
+
+    const internalDate = Number(msg.data.internalDate);
+
+    if (!internalDate) continue;
+
+    /**
+     * Ignore anything that was already in Gmail before this
+     * customer's one-time check started.
+     */
+    if (internalDate <= afterMs) continue;
+
+    candidates.push({
+      id: message.id,
+      internalDate,
+    });
+  }
+
+  /**
+   * Earliest newly-arrived email first.
+   */
+  candidates.sort((a, b) => a.internalDate - b.internalDate);
+
+  /**
+   * Now inspect the new messages in chronological order.
+   *
+   * This guarantees that if several new emails arrived,
+   * we return the FIRST one containing a recognizable code.
+   */
+  for (const candidate of candidates) {
+    const msg = await gmail.users.messages.get({
+      userId: "me",
+      id: candidate.id,
       format: "full",
     });
 
-    /**
-     * Gmail internalDate is the time Gmail received the message,
-     * expressed in milliseconds since Unix epoch.
-     */
-    const internalDate = Number(msg.data.internalDate);
-
-    if (!internalDate) {
-      continue;
-    }
-
-    /**
-     * Ignore all emails that existed before the customer
-     * confirmed the request.
-     */
-    if (internalDate <= afterMs) {
-      continue;
-    }
-
-    newestNewEmailFound = true;
-
-    /**
-     * Extract only the plain-text email content needed for
-     * OTP detection.
-     */
     const emailText =
       extractText(msg.data.payload)?.trim() || "";
 
-    if (!emailText) {
-      continue;
-    }
+    if (!emailText) continue;
 
-    /**
-     * Extract the OTP and a short instruction.
-     */
     const otpData = extractOtpData(emailText);
 
-    if (otpData.code) {
-      return {
-        found: true,
-        instruction: otpData.instruction,
-        text: otpData.code,
-      };
-    }
-  }
+    if (!otpData.code) continue;
 
-  /**
-   * At least one new email arrived, but none of the new
-   * messages contained a recognizable OTP/code.
-   */
-  if (newestNewEmailFound) {
     return {
-      found: false,
-      instruction: null,
-      text: null,
-      reason: "code_not_found",
+      found: true,
+      instruction:
+        otpData.instruction ||
+        "Use this code to complete your sign-in.",
+      text: otpData.code,
     };
   }
 
-  /**
-   * No email was received after the customer's confirmation
-   * timestamp.
-   */
   return {
     found: false,
     instruction: null,
     text: null,
-    reason: "no_new_email",
   };
 }
