@@ -11,7 +11,7 @@ export async function GET() {
 
   const orders = await prisma.boostOrder.findMany({
     orderBy: { createdAt: "desc" },
-    take: 200,
+    // no limit - load all orders so pagination reaches the first one
     include: { user: { select: { name: true, email: true, phone: true } } },
   });
 

@@ -9,9 +9,9 @@ import {
   Zap,
   Star,
   ArrowRight,
-  Smartphone,
 } from "lucide-react";
 import BoostingGraphic from "../components/BoostingGraphic";
+import SmsNumbersGraphic from "../components/SmsNumbersGraphic";
 
 type ProductOption = {
   name?: string;
@@ -232,12 +232,12 @@ export default function ShopPage() {
       </Link>
 
       {/* SMS Numbers feature entry */}
-      {/*<Link
+      <Link
         href="/shop/sms-numbers"
         className="card hover-lift mb-6 flex items-center gap-4 overflow-hidden !p-0"
       >
-        <div className="flex h-28 w-40 shrink-0 items-center justify-center bg-gradient-to-br from-primary to-ink">
-          <Smartphone size={34} className="text-white/90" />
+        <div className="h-28 w-40 shrink-0 overflow-hidden">
+          <SmsNumbersGraphic />
         </div>
 
         <div className="py-3 pr-4">
@@ -253,7 +253,7 @@ export default function ShopPage() {
             WhatsApp, Google, Telegram &amp; more — code shows up live. Tap to browse →
           </p>
         </div>
-      </Link>*/}
+      </Link>
 
       <div className="flex flex-wrap gap-2">
         {categories.map((c) => (

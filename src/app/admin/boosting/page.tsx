@@ -9,11 +9,17 @@ type Order = {
   paymentStatus: string; panelStatus?: string; panelOrderId?: string; createdAt: string;
 };
 
-const LOW_BALANCE = 20; // GHS/USD threshold to warn
+const PER_PAGE = 10;
+const LOW_BALANCE = 20;
 
-function StatusPill({ text, tone }: { text: string; tone: "good" | "warn" | "bad" | "muted" }) {
-  const cls = tone === "good" ? "bg-primary/10 text-primary" : tone === "warn" ? "bg-amber-500/15 text-amber-700" : tone === "bad" ? "bg-ghRed/10 text-ghRed" : "bg-mist text-ink/60";
-  return <span className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>{text}</span>;
+// Same status pill styling as the data bundle orders page.
+function StatusPill({ status }: { status: string }) {
+  const s = (status || "").toUpperCase();
+  let cls = "bg-mist text-ink/70";
+  if (["DELIVERED", "COMPLETED", "PAID", "SUCCESS"].includes(s)) cls = "bg-primary/10 text-primary";
+  else if (["PROCESSING", "PENDING", "IN PROGRESS", "PARTIAL"].includes(s)) cls = "bg-amber-500/15 text-amber-700";
+  else if (["FAILED", "CANCELLED", "CANCELED", "REJECTED", "REFUNDED"].includes(s)) cls = "bg-ghRed/10 text-ghRed";
+  return <span className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>{status || "—"}</span>;
 }
 
 export default function AdminBoosting() {
@@ -22,6 +28,15 @@ export default function AdminBoosting() {
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [page, setPage] = useState(1);
+
+  function load() {
+    setLoading(true);
+    fetch("/api/admin/boosting").then((r) => r.json()).then((d) => {
+      if (!d.error) { setOrders(d.orders || []); setBalance(d.balance); setBalanceError(d.balanceError); }
+    }).finally(() => setLoading(false));
+  }
+  useEffect(load, []);
 
   async function syncStatuses() {
     setSyncing(true);
@@ -34,23 +49,8 @@ export default function AdminBoosting() {
     setSyncing(false);
   }
 
-  function load() {
-    setLoading(true);
-    fetch("/api/admin/boosting").then((r) => r.json()).then((d) => {
-      if (!d.error) { setOrders(d.orders || []); setBalance(d.balance); setBalanceError(d.balanceError); }
-    }).finally(() => setLoading(false));
-  }
-  useEffect(load, []);
-
-  function paymentTone(s: string) { return s === "PAID" ? "good" : "muted"; }
-  function panelTone(s?: string) {
-    if (!s) return "muted";
-    const l = s.toLowerCase();
-    if (l.includes("complete")) return "good";
-    if (l.startsWith("failed")) return "bad";
-    if (l.includes("partial") || l.includes("progress") || l.includes("pending")) return "warn";
-    return "muted";
-  }
+  const totalPages = Math.max(1, Math.ceil(orders.length / PER_PAGE));
+  const slice = orders.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
@@ -59,12 +59,14 @@ export default function AdminBoosting() {
           <h1 className="text-2xl font-bold">Social Media Boosting</h1>
           <p className="mt-1 text-sm text-slate">All boosting orders and your panel balance.</p>
         </div>
-        <button onClick={load} className="btn-secondary inline-flex items-center gap-2 !py-2 !text-sm">
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
-        </button>
-        <button onClick={syncStatuses} disabled={syncing} className="btn-primary ml-2 inline-flex items-center gap-2 !py-2 !text-sm disabled:opacity-50">
-          <RefreshCw size={15} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync statuses"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={load} className="btn-secondary inline-flex items-center gap-2 !py-2 !text-sm">
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+          <button onClick={syncStatuses} disabled={syncing} className="btn-primary inline-flex items-center gap-2 !py-2 !text-sm disabled:opacity-50">
+            <RefreshCw size={15} className={syncing ? "animate-spin" : ""} /> {syncing ? "Syncing…" : "Sync statuses"}
+          </button>
+        </div>
       </div>
 
       {/* Panel balance */}
@@ -81,15 +83,15 @@ export default function AdminBoosting() {
             <p className="mt-2 text-3xl font-bold">{balance.toFixed(2)}</p>
             {balance <= LOW_BALANCE && (
               <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
-                <AlertTriangle size={14} /> Low balance — top up gainrealgrowth or boost orders will fail.
+                <AlertTriangle size={14} /> Low balance — top up the panel or boost orders will fail.
               </p>
             )}
           </>
         )}
-        <p className="mt-3 text-xs text-ink/50">This is your gainrealgrowth balance. Customer payments come to your Paystack; boosts are paid from this panel balance.</p>
+        <p className="mt-3 text-xs text-ink/50">Customer payments come to your Paystack; boosts are paid from this panel balance.</p>
       </div>
 
-      {/* Orders table */}
+      {/* Orders table — same card style as the data bundle orders page */}
       <div className="card mt-6 p-0">
         <div className="border-b border-ink/10 px-5 py-3"><h2 className="font-semibold">Boost orders</h2></div>
         <div className="overflow-x-auto">
@@ -100,7 +102,7 @@ export default function AdminBoosting() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((o) => (
+              {slice.map((o) => (
                 <tr key={o.id} className="border-b border-ink/5 hover:bg-mist/50">
                   <td className="whitespace-nowrap px-5 py-3 text-xs text-slate">{new Date(o.createdAt).toLocaleString()}</td>
                   <td className="whitespace-nowrap">
@@ -111,17 +113,31 @@ export default function AdminBoosting() {
                   <td className="max-w-[180px] truncate"><a href={o.link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" title={o.link}>{o.link}</a></td>
                   <td>{o.quantity}</td>
                   <td className="whitespace-nowrap">GH₵ {o.amount.toFixed(2)}</td>
-                  <td><StatusPill text={o.paymentStatus} tone={paymentTone(o.paymentStatus)} /></td>
-                  <td><StatusPill text={o.panelStatus || "—"} tone={panelTone(o.panelStatus)} /></td>
+                  <td><StatusPill status={o.paymentStatus} /></td>
+                  <td><StatusPill status={o.panelStatus || "—"} /></td>
                 </tr>
               ))}
-              {orders.length === 0 && !loading && (
+              {slice.length === 0 && !loading && (
                 <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate">No boost orders yet.</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        {loading && <p className="px-5 py-4 text-sm text-slate"><Loader2 size={14} className="mr-1 inline animate-spin" /> Loading…</p>}
+        <Pager page={page} totalPages={totalPages} onChange={setPage} count={orders.length} />
+      </div>
+    </div>
+  );
+}
+
+// Same pager as the data bundle orders page.
+function Pager({ page, totalPages, onChange, count }: { page: number; totalPages: number; onChange: (p: number) => void; count: number }) {
+  return (
+    <div className="flex items-center justify-between border-t border-ink/10 px-5 py-3 text-sm">
+      <span className="text-slate">{count} order{count === 1 ? "" : "s"}</span>
+      <div className="flex items-center gap-3">
+        <span className="text-slate">Page {page} of {totalPages}</span>
+        <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Prev</button>
+        <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Next</button>
       </div>
     </div>
   );

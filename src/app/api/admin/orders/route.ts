@@ -12,12 +12,12 @@ export async function GET() {
     prisma.dataOrder.findMany({
       include: { user: true, bundle: true },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      // no limit - load all orders
     }),
     prisma.pinOrder.findMany({
       include: { user: true, pin: true },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      // no limit - load all orders
     }),
   ]);
 

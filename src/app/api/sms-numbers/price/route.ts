@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
 
   // Reuses the same USD->GHS + markup settings your SMM boosting already uses -
   // it's the same conversion problem, no need for a second settings table.
-  const settings = await prisma.smmSettings.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
+  // Own settings row, separate from boosting's - see SmsPoolSettings.
+  const settings = await prisma.smsPoolSettings.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
 
   try {
     const usd = await getSmsPoolPrice(countryId, serviceId);

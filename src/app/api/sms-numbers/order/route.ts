@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Country and service are required." }, { status: 400 });
   }
 
-  const settings = await prisma.smmSettings.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
+  // Own settings row, separate from boosting's - see SmsPoolSettings.
+  const settings = await prisma.smsPoolSettings.upsert({ where: { id: "default" }, update: {}, create: { id: "default" } });
 
   // Re-price server-side from SMSPool directly (never trust a client price).
   let amount: number;

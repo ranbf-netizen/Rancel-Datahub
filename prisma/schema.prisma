@@ -357,3 +357,12 @@ model SmsOrder {
   createdAt         DateTime  @default(now())
   user              User      @relation(fields: [userId], references: [id])
 }
+
+// Independent margin settings for SMS Numbers, deliberately separate from
+// SmmSettings so boosting margins and SMS margins can be tuned on their own
+// - they're different businesses with different cost structures.
+model SmsPoolSettings {
+  id        String @id @default("default")
+  markupPct Float  @default(40)
+  usdToGhs  Float  @default(14)
+}
