@@ -194,6 +194,16 @@ export default function HomePage() {
             <span className="mt-4 inline-block text-sm font-semibold text-primary group-hover:underline">
               Get a PIN →
             </span>
+
+            <Link
+            href="/tools"
+            className="group relative overflow-hidden rounded-2xl border border-ink/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-lg"
+          >
+            <p className="text-lg font-semibold">AI Tools</p>
+            <p className="mt-1 text-sm text-slate">Powerful AI tools to enhance and boost work productivity.</p>
+            <span className="mt-4 inline-block text-sm font-semibold text-primary group-hover:underline">
+              Get a PIN →
+            </span>
           </Link>
 
           <Link
