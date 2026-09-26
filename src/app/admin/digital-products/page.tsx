@@ -28,6 +28,7 @@ const EMPTY = {
   title: "",
   description: "",
   instructions: "",
+  accessNote: "",
   category: "",
   price: "",
   stock: "",
@@ -71,6 +72,7 @@ export default function AdminDigitalProducts() {
       title: p.title ?? "",
       description: p.description ?? "",
       instructions: p.instructions ?? "",
+      accessNote: p.accessNote ?? "",
       category: p.category ?? "",
       price: p.price != null ? String(p.price) : "",
       stock: p.stock != null ? String(p.stock) : "",
@@ -389,6 +391,13 @@ export default function AdminDigitalProducts() {
           onChange={(e) =>
             set("instructions", e.target.value)
           }
+        />
+
+        <input
+          className="field"
+          placeholder="Small note after payment (optional, shown bold above the button)"
+          value={form.accessNote}
+          onChange={(e) => set("accessNote", e.target.value)}
         />
 
         <div className="grid grid-cols-2 gap-3">

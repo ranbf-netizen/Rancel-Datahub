@@ -88,8 +88,8 @@ export default function AdminOverview() {
           ))}
           {!stats && <p className="text-sm text-ink/50">Loading…</p>}
         </div>
-        <p className="mt-2 text-xs text-slate">Hover (or tap) a bar to see that day&rsquo;s revenue and profit.</p>
-      </div>
+        {/*<p className="mt-2 text-xs text-slate">Hover (or tap) a bar to see that day&rsquo;s revenue and profit.</p>
+      </div>*/}
 
       {/* Single-date lookup */}
       <div className="mt-4 card">
@@ -156,9 +156,9 @@ export default function AdminOverview() {
             )}
           </>
         )}
-        <p className="mt-3 text-xs text-ink/50">
+        {/*<p className="mt-3 text-xs text-ink/50">
           This is your balance on the supplier&rsquo;s platform, separate from what customers pay you. Fund it whenever it runs low.
-        </p>
+        </p>*/}
       </div>
     </div>
   );

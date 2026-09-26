@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       title: purchase.product.title,
       fileUrl: purchase.product.fileUrl,
       deliveryType: purchase.product.deliveryType,
+      accessNote: purchase.product.accessNote || null,
       revealContent: purchase.product.deliveryType === "REVEAL" ? purchase.product.revealContent : null,
     });
   } catch (error: any) {

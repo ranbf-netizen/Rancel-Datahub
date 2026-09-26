@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     const {
       title,
       description,
-      instructions,
+      instructions, accessNote,
       category,
       price,
       fileUrl,
@@ -183,6 +183,7 @@ gmailRevealSeconds,
 
         description: description || null,
         instructions: instructions || null,
+      accessNote: accessNote || null,
         category: category || null,
 
         price: numericPrice,
@@ -308,6 +309,7 @@ export async function PATCH(req: NextRequest) {
       "title",
       "description",
       "instructions",
+      "accessNote",
       "category",
       "fileUrl",
       "coverUrl",

@@ -77,9 +77,9 @@ export default function AdminAnalytics() {
             )}
           </div>
 
-          <p className="mt-4 text-xs text-slate">
+          {/*<p className="mt-4 text-xs text-slate">
             Tip: share links with a <code>?src=</code> tag (e.g. <code>ranceldatahub.shop/shop?src=tiktok</code>) to track exactly where visitors come from. Sources without a tag are detected from the referrer where possible.
-          </p>
+          </p>*/}
         </>
       )}
     </div>

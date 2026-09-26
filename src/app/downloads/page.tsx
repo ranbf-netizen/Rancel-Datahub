@@ -69,6 +69,7 @@ function DownloadInner() {
     title: string;
     fileUrl: string;
     deliveryType: string;
+    accessNote?: string | null;
     revealContent: string | null;
     gmailAddress?: string | null;
     revealInstruction?: string | null;
@@ -366,6 +367,9 @@ function DownloadInner() {
             </div>
           ) : (
             <>
+              {item.accessNote && (
+                <p className="mt-5 text-sm font-bold text-ink">{item.accessNote}</p>
+              )}
               {["MANUAL", "MANUAL_FULFILMENT", "MANUAL_FULFILLMENT"].includes(item.deliveryType) ? (
                 <div className="mt-5 rounded-2xl border border-ink/10 bg-mist/60 px-5 py-8 text-center">
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"><ClipboardList size={24} className="text-primary" /></div>

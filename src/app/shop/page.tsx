@@ -232,7 +232,7 @@ export default function ShopPage() {
       </Link>
 
       {/* SMS Numbers feature entry */}
-      <Link
+      {/*<Link
         href="/shop/sms-numbers"
         className="card hover-lift mb-6 flex items-center gap-4 overflow-hidden !p-0"
       >
@@ -253,7 +253,7 @@ export default function ShopPage() {
             WhatsApp, Google, Telegram &amp; more — code shows up live. Tap to browse →
           </p>
         </div>
-      </Link>
+      </Link>*/}
 
       <div className="flex flex-wrap gap-2">
         {categories.map((c) => (

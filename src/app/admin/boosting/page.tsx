@@ -88,7 +88,7 @@ export default function AdminBoosting() {
             )}
           </>
         )}
-        <p className="mt-3 text-xs text-ink/50">Customer payments come to your Paystack; boosts are paid from this panel balance.</p>
+        {/*<p className="mt-3 text-xs text-ink/50">Customer payments come to your Paystack; boosts are paid from this panel balance.</p>*/}
       </div>
 
       {/* Orders table — same card style as the data bundle orders page */}

@@ -43,9 +43,9 @@ export default function AdminWithdrawals() {
   return (
     <div>
       <h1 className="text-2xl font-bold">Agent Withdrawals</h1>
-      <p className="mt-1 text-sm text-slate">
+      {/*<p className="mt-1 text-sm text-slate">
         Pay the agent by momo/bank outside the platform, then mark the request as paid here for your records.
-      </p>
+      </p>*/}
 
       {pending.length > 0 && (
         <p className="mt-4 rounded-lg bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700">

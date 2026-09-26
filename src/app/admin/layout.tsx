@@ -15,7 +15,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Link href="/admin" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><LayoutDashboard size={16} /> Overview</Link>
         <Link href="/admin/analytics" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><BarChart3 size={16} /> Analytics</Link>
         <Link href="/admin/bundles" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Package size={16} /> Data Bundles</Link>
-        <Link href="/admin/pins" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Ticket size={16} /> Results PINs</Link>
+        {/*<Link href="/admin/pins" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Ticket size={16} /> Results PINs</Link>*/}
         <Link href="/admin/digital-products" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><ShoppingBag size={16} /> Shop Products</Link>
         <Link href="/admin/boosting" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Rocket size={16} /> Boosting</Link>
         <Link href="/admin/sms-numbers" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Smartphone size={16} /> SMS Numbers</Link>

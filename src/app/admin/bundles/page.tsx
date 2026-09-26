@@ -68,10 +68,10 @@ export default function AdminBundlesPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold">Data Bundles</h1>
-      <p className="mt-1 text-sm text-slate">
+      {/*<p className="mt-1 text-sm text-slate">
         Cledanet doesn't provide a live catalog, so bundles are added manually here based on
         their current sizes and rates.
-      </p>
+      </p>*/}
 
       <form onSubmit={handleAdd} className="card mt-6 max-w-xl">
         <p className="text-sm font-semibold">Add a bundle</p>
