@@ -206,7 +206,8 @@ model DigitalProduct {
   deliveryEstimate   String?
   featured           Boolean           @default(false)
   instantDelivery    Boolean           @default(false)
-  instructions       String?
+    instructions       String?
+  accessNote         String?
   platform           String?
   productType        String            @default("DIGITAL")
   quantity           String?
