@@ -185,6 +185,7 @@ export default function HomePage() {
               Browse bundles →
             </span>
           </Link>
+          
           <Link
             href="/results"
             className="group relative overflow-hidden rounded-2xl border border-ink/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-lg"
@@ -194,6 +195,7 @@ export default function HomePage() {
             <span className="mt-4 inline-block text-sm font-semibold text-primary group-hover:underline">
               Get a PIN →
             </span>
+            </Link>
 
             <Link
             href="/tools"
