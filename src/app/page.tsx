@@ -195,6 +195,17 @@ export default function HomePage() {
               Get a PIN →
             </span>
           </Link>
+
+          <Link
+            href="/shop"
+            className="group relative overflow-hidden rounded-2xl border border-ink/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-lg"
+          >
+            <p className="text-lg font-semibold">Digital Products</p>
+            <p className="mt-1 text-sm text-slate">Apple One, Netflix, SnapChat Plus, SnapChat Upgrade, etc. — instant delivery and manual fulfilments.</p>
+            <span className="mt-4 inline-block text-sm font-semibold text-primary group-hover:underline">
+              Browse products →
+            </span>
+          </Link>
         </div>
 
         <div className="mt-8">
