@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function Footer() {
   return (
     <footer className="mt-20 border-t border-ink/10 bg-mist">
-      <div className="mx-auto grid max-w-5xl gap-8 px-5 py-12 sm:grid-cols-2 md:grid-cols-5">
+      <div className="mx-auto grid max-w-5xl grid-cols-2 gap-8 px-5 py-12 md:grid-cols-5">
         <div className="sm:col-span-2 md:col-span-1">
           <p className="font-display text-lg font-bold text-ink">
             RanCel <span className="text-primary">DataHub</span>
