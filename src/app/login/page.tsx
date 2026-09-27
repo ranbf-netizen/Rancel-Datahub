@@ -51,7 +51,7 @@ function LoginPageInner() {
   const labelClass = "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink/60";
 
   return (
-    <div className="relative flex min-h-[85vh] items-center justify-center bg-[#EEF2F9] px-5 py-16">
+    <div className="relative flex min-h-screen items-center justify-center bg-[#EEF2F9] px-5 py-16">
       <AuthBackground />
       <div className="relative w-full max-w-sm rounded-3xl border border-white/50 bg-white/30 p-8 shadow-2xl backdrop-blur-2xl">
         <h1 className="text-3xl font-bold text-ink">Log in</h1>
