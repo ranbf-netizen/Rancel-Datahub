@@ -135,14 +135,14 @@ export default function StorePage({ params }: { params: { slug: string } }) {
 
 
       {/* Network tabs */}
-      <div className="mt-8 flex flex-wrap gap-2">
+      <div className="mt-8 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {Object.entries(NETWORK_LABELS)
           .filter(([key]) => networksPresent.length === 0 || networksPresent.includes(key))
           .map(([key, label]) => (
             <button
               key={key}
               onClick={() => { setNetwork(key); setSelected(null); }}
-              className={`chip flex items-center gap-2 ${network === key ? NETWORK_ACTIVE_CHIP[key] : ""}`}
+              className={`chip flex shrink-0 items-center gap-2 ${network === key ? NETWORK_ACTIVE_CHIP[key] : ""}`}
             >
               <span className={`h-2 w-2 rounded-full ${network === key ? "bg-current" : NETWORK_DOT[key]}`} />
               {label}
@@ -167,7 +167,7 @@ export default function StorePage({ params }: { params: { slug: string } }) {
       </div>
 
       {/* Bundle cards */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
         {loading && <p className="text-sm text-slate">Loading bundles…</p>}
         {!loading && filtered.length === 0 && (
           <p className="col-span-full rounded-xl border border-dashed border-ink/15 p-6 text-sm text-slate">

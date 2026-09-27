@@ -19,7 +19,7 @@ export default function HomePage() {
           style={{ backgroundImage: "url('/hero-bg.jpg')" }}
           aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-ink/90 via-ink/80 to-ink/70" aria-hidden="true" />
+        <div className="absolute inset-0 bg-ink/80" aria-hidden="true" />
 
         <div className="relative mx-auto grid max-w-6xl gap-12 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div>
@@ -33,11 +33,11 @@ export default function HomePage() {
               Buy data bundles, access digital subscriptions, discover AI-powered tools, download
               digital products, and grow your business — all from one platform.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/data" className="btn-primary">Buy Data Now</Link>
-              <Link href="/shop" className="btn-primary">Shop Now</Link>
-              <Link href="/tools" className="btn-ghost-light">Try AI Tools</Link>
-            </div>
+            <div className="mt-8 flex gap-2">
+  <Link href="/data" className="btn-primary !px-3 !py-2 !text-xs">Buy Data Now</Link>
+  <Link href="/shop" className="btn-primary !px-3 !py-2 !text-xs">Shop Now</Link>
+  <Link href="/tools" className="btn-ghost-light !px-3 !py-2 !text-xs">Try AI Tools</Link>
+</div>
 
             <div className="mt-12 grid grid-cols-3 gap-6 border-t border-white/10 pt-6">
               <Stat value="Instant" label="Delivery" />

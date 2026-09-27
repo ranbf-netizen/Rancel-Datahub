@@ -39,11 +39,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper/95 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
             <Link href="/" className="flex items-center gap-2 font-display text-xl font-bold text-ink">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-                <Signal size={18} />
-              </span>
-              <span>RanCel <span className="text-primary">DataHub</span></span>
-            </Link>
+  <img src="/logo.svg" alt="RanCel DataHub" className="h-9 w-9" />
+  <span>RanCel <span className="text-primary">DataHub</span></span>
+</Link>
 
             {/* Desktop nav */}
             <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">

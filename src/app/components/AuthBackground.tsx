@@ -16,7 +16,7 @@ const BUBBLES = [
 
 export default function AuthBackground() {
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: -10, overflow: "hidden", pointerEvents: "none" }}>
+    <div style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none" }}>
       <style>{`
         @keyframes rdh-bubble {
           0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }

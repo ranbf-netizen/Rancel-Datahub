@@ -187,7 +187,7 @@ export default function DataPage() {
       </div>
 
       {/* Bundle cards */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
         {loading && <p className="text-sm text-slate">Loading bundles…</p>}
         {!loading && filtered.length === 0 && (
           <p className="col-span-full rounded-xl border border-dashed border-ink/15 p-6 text-sm text-slate">
