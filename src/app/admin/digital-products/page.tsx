@@ -867,10 +867,10 @@ export default function AdminDigitalProducts() {
                 key={p.id}
                 className="border-b border-ink/5"
               >
-                <td className="py-2">
+                                <td className="py-2">
                   {p.title}
 
-                  {p.platform ? (
+                  {p.productType === "BOOSTING" && p.platform ? (
                     <span className="text-slate">
                       {" "}
                       · {p.platform}

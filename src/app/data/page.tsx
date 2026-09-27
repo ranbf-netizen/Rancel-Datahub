@@ -28,8 +28,6 @@ const NETWORK_DOT: Record<string, string> = {
   AIRTELTIGO_BIGTIME: "bg-airteltigo",
 };
 
-// Active tab + Buy button per network, using each network's real brand color.
-// MTN yellow needs dark text for contrast; Telecel red and AirtelTigo blue use white text.
 const NETWORK_ACTIVE_CHIP: Record<string, string> = {
   MTN: "!border-transparent !bg-mtn !text-ink",
   TELECEL: "!border-transparent !bg-telecel !text-white",
@@ -71,7 +69,6 @@ export default function DataPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Pre-select the bundle handed off from the homepage Quick Buy widget, once loaded.
   useEffect(() => {
     const preselectId = searchParams.get("bundle");
     if (!preselectId || bundles.length === 0) return;
@@ -79,8 +76,6 @@ export default function DataPage() {
     if (match) setSelected(match);
   }, [bundles, searchParams]);
 
-  // Warn (not block) if the recipient number isn't verified yet - only matters for
-  // bundles bigger than 1GB, since a 1GB purchase IS the activation step itself.
   useEffect(() => {
     if (!selected || selected.dataSizeGb <= 1 || !isValidGhanaNumber(beneficiary)) {
       setNumberCheck(null);
@@ -111,8 +106,6 @@ export default function DataPage() {
     return list;
   }, [bundles, network, search, sort]);
 
-  // Badge heuristics: "Best Value" = lowest price-per-GB in this network;
-  // "Popular" = the bundle size closest to the network's average size.
   const { bestValueId, popularId } = useMemo(() => {
     const networkBundles = bundles.filter((b) => b.network === network);
     if (networkBundles.length === 0) return { bestValueId: null as string | null, popularId: null as string | null };
@@ -162,14 +155,14 @@ export default function DataPage() {
 
 
       {/* Network tabs */}
-      <div className="mt-8 flex flex-wrap gap-2">
+      <div className="mt-8 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {Object.entries(NETWORK_LABELS)
           .filter(([key]) => networksPresent.length === 0 || networksPresent.includes(key))
           .map(([key, label]) => (
             <button
               key={key}
               onClick={() => { setNetwork(key); setSelected(null); }}
-              className={`chip flex items-center gap-2 ${network === key ? NETWORK_ACTIVE_CHIP[key] : ""}`}
+              className={`chip flex shrink-0 items-center gap-2 ${network === key ? NETWORK_ACTIVE_CHIP[key] : ""}`}
             >
               <span className={`h-2 w-2 rounded-full ${network === key ? "bg-current" : NETWORK_DOT[key]}`} />
               {label}

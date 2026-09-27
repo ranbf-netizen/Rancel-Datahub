@@ -255,12 +255,12 @@ export default function ShopPage() {
         </div>
       </Link>*/}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {categories.map((c) => (
           <button
             key={c}
             onClick={() => setCategory(c)}
-            className={`chip ${
+            className={`chip shrink-0 ${
               category === c ? "chip-active" : ""
             }`}
           >
