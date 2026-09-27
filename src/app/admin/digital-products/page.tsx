@@ -401,14 +401,19 @@ export default function AdminDigitalProducts() {
         />
 
         <div className="grid grid-cols-2 gap-3">
-          <input
-            className="field"
-            placeholder="Category (optional)"
-            value={form.category}
-            onChange={(e) =>
-              set("category", e.target.value)
-            }
-          />
+          <select
+  className="field"
+  value={form.category}
+  onChange={(e) => set("category", e.target.value)}
+>
+  <option value="">Select category (optional)</option>
+  <option value="VPNs">VPNs</option>
+  <option value="Apple">Apple</option>
+  <option value="Ebooks">Ebooks</option>
+  <option value="Music">Music</option>
+  <option value="Movies">Movies</option>
+  <option value="Others">Others</option>
+</select>
 
           <input
             className="field"
