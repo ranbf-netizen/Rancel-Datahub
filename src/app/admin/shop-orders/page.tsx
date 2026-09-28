@@ -29,7 +29,7 @@ export default function AdminShopOrders() {
 
   function load() {
     setLoading(true);
-    fetch("/api/admin/shop-orders").then((r) => r.json()).then((d) => { if (!d.error) setOrders(d.orders || []); }).finally(() => setLoading(false));
+    fetch("/api/admin/shop-orders").then((r) => r.json()).then((d) => { if (!d.error) setOrders((d.orders || []).filter((o: any) => o.paymentStatus === "PAID")); }).finally(() => setLoading(false));
   }
   useEffect(load, []);
 

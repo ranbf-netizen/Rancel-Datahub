@@ -33,7 +33,7 @@ export default function AdminBoosting() {
   function load() {
     setLoading(true);
     fetch("/api/admin/boosting").then((r) => r.json()).then((d) => {
-      if (!d.error) { setOrders(d.orders || []); setBalance(d.balance); setBalanceError(d.balanceError); }
+            if (!d.error) { setOrders((d.orders || []).filter((o: any) => o.paymentStatus === "PAID")); setBalance(d.balance); setBalanceError(d.balanceError); }
     }).finally(() => setLoading(false));
   }
   useEffect(load, []);

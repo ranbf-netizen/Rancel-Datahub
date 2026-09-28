@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 const PER_PAGE = 10;
 
@@ -16,34 +16,19 @@ function StatusPill({ status }: { status: string }) {
 
 export default function AdminOrdersPage() {
   const [dataOrders, setDataOrders] = useState<any[]>([]);
-  const [pinOrders, setPinOrders] = useState<any[]>([]);
-  const [checkingRef, setCheckingRef] = useState<string | null>(null);
   const [checkingDelivery, setCheckingDelivery] = useState<string | null>(null);
   const [dataPage, setDataPage] = useState(1);
-  const [pinPage, setPinPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   function load() {
     setLoading(true);
     fetch("/api/admin/orders").then((r) => r.json()).then((d) => {
-      setDataOrders(d.dataOrders || []);
-      setPinOrders(d.pinOrders || []);
+      // Only show PAID orders (hide failed/pending).
+      setDataOrders((d.dataOrders || []).filter((o: any) => o.paymentStatus === "PAID"));
     }).finally(() => setLoading(false));
   }
 
   useEffect(load, []);
-
-  async function checkNow(reference: string) {
-    setCheckingRef(reference);
-    const res = await fetch("/api/orders/verify", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reference }),
-    });
-    const data = await res.json();
-    setCheckingRef(null);
-    if (!res.ok) { alert(data.error || "Could not check this order."); return; }
-    alert(`Paystack says: ${data.paystackStatus}`);
-    load();
-  }
 
   async function checkDelivery(orderId: string) {
     setCheckingDelivery(orderId);
@@ -58,16 +43,14 @@ export default function AdminOrdersPage() {
   }
 
   const dataTotalPages = Math.max(1, Math.ceil(dataOrders.length / PER_PAGE));
-  const pinTotalPages = Math.max(1, Math.ceil(pinOrders.length / PER_PAGE));
   const dataSlice = dataOrders.slice((dataPage - 1) * PER_PAGE, dataPage * PER_PAGE);
-  const pinSlice = pinOrders.slice((pinPage - 1) * PER_PAGE, pinPage * PER_PAGE);
 
   return (
     <div>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Orders</h1>
-          <p className="mt-1 text-sm text-slate">View and manage your data bundle and PIN orders.</p>
+          <p className="mt-1 text-sm text-slate">Paid data bundle orders.</p>
         </div>
         <button onClick={load} className="btn-secondary inline-flex items-center gap-2 !py-2 !text-sm">
           <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
@@ -97,16 +80,6 @@ export default function AdminOrdersPage() {
                   <td><StatusPill status={o.paymentStatus} /></td>
                   <td><StatusPill status={o.fulfillmentStatus} /></td>
                   <td className="px-5">
-                    {(o.paymentStatus === "PENDING" || o.fulfillmentStatus === "FAILED") && o.paystackReference && (
-                      <button
-                        className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
-                        disabled={checkingRef === o.paystackReference}
-                        onClick={() => checkNow(o.paystackReference)}
-                      >
-                        <RefreshCw size={12} className={checkingRef === o.paystackReference ? "animate-spin" : ""} />
-                        {checkingRef === o.paystackReference ? "Checking…" : "Check now"}
-                      </button>
-                    )}
                     {o.paymentStatus === "PAID" && o.fulfillmentStatus === "PROCESSING" && (
                       <button
                         className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
@@ -121,56 +94,12 @@ export default function AdminOrdersPage() {
                 </tr>
               ))}
               {dataSlice.length === 0 && (
-                <tr><td colSpan={8} className="px-5 py-6 text-center text-sm text-slate">No orders.</td></tr>
+                <tr><td colSpan={8} className="px-5 py-6 text-center text-sm text-slate">No paid orders.</td></tr>
               )}
             </tbody>
           </table>
         </div>
         <Pager page={dataPage} totalPages={dataTotalPages} onChange={setDataPage} count={dataOrders.length} />
-      </div>
-
-      {/* PIN Orders */}
-      <div className="card mt-8 p-0">
-        <div className="border-b border-ink/10 px-5 py-3">
-          <h2 className="font-semibold">PIN Orders</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead>
-              <tr className="border-b border-ink/10 text-left text-xs uppercase text-slate">
-                <th className="px-5 py-3">Date</th><th>Customer</th><th>Exam</th><th>Amount</th><th>Payment</th><th>PIN</th><th className="px-5">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pinSlice.map((o) => (
-                <tr key={o.id} className="border-b border-ink/5 hover:bg-mist/50">
-                  <td className="whitespace-nowrap px-5 py-3 text-xs text-slate">{new Date(o.createdAt).toLocaleString()}</td>
-                  <td>{o.user ? o.user.name : <span className="text-slate">Guest{o.guestPhone ? ` · ${o.guestPhone}` : ""}</span>}</td>
-                  <td className="whitespace-nowrap">{[o.examType, o.year].filter(Boolean).join(" ") || "Results Checker"}</td>
-                  <td className="whitespace-nowrap">GH₵ {o.amount.toFixed(2)}</td>
-                  <td><StatusPill status={o.paymentStatus} /></td>
-                  <td className="whitespace-nowrap">{o.pin ? o.pin.serialNumber : "—"}</td>
-                  <td className="px-5">
-                    {o.paymentStatus === "PENDING" && o.paystackReference && (
-                      <button
-                        className="inline-flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
-                        disabled={checkingRef === o.paystackReference}
-                        onClick={() => checkNow(o.paystackReference)}
-                      >
-                        <RefreshCw size={12} className={checkingRef === o.paystackReference ? "animate-spin" : ""} />
-                        {checkingRef === o.paystackReference ? "Checking…" : "Check now"}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {pinSlice.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-6 text-center text-sm text-slate">No orders.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <Pager page={pinPage} totalPages={pinTotalPages} onChange={setPinPage} count={pinOrders.length} />
       </div>
     </div>
   );

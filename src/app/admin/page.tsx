@@ -27,6 +27,38 @@ export default function AdminOverview() {
   const [dayResult, setDayResult] = useState<{ revenue: number; profit: number; count: number } | null>(null);
   const [dayLoading, setDayLoading] = useState(false);
 
+    const [resolving, setResolving] = useState(false);
+  const [resolvingRefunds, setResolvingRefunds] = useState(false);
+
+  async function resolveStuck() {
+    if (!confirm("Check stuck orders against the supplier and resolve them (a batch of 20 at a time)? Safe — it checks each order's real status.")) return;
+    setResolving(true);
+    try {
+      const r = await fetch("/api/admin/resolve-stuck", { method: "POST" });
+      const d = await r.json();
+      if (r.ok) {
+        alert(`Checked ${d.checked}: ${d.delivered} delivered, ${d.failed} failed, ${d.stillPending} still pending. ${d.remaining} stuck remaining.`);
+        // reload stats
+        fetch("/api/admin/stats").then((res) => res.json()).then((s) => { if (!s.error) setStats(s); }).catch(() => {});
+      } else alert(d.error || "Could not resolve.");
+    } catch { alert("Could not resolve."); }
+    setResolving(false);
+  }
+
+  async function resolveRefunds() {
+    if (!confirm("Mark all pending refunds as resolved? Only do this AFTER you've actually paid the customers — this is bookkeeping only, it does not send money.")) return;
+    setResolvingRefunds(true);
+    try {
+      const r = await fetch("/api/admin/resolve-refunds", { method: "POST" });
+      const d = await r.json();
+      if (r.ok) {
+        alert(`${d.resolved} refund(s) marked resolved.`);
+        fetch("/api/admin/stats").then((res) => res.json()).then((s) => { if (!s.error) setStats(s); }).catch(() => {});
+      } else alert(d.error || "Could not resolve.");
+    } catch { alert("Could not resolve."); }
+    setResolvingRefunds(false);
+  }
+
   async function lookupDate() {
     if (!date) return;
     setDayLoading(true);
@@ -79,9 +111,17 @@ export default function AdminOverview() {
                   <div>Profit: GH₵ {d.profit.toFixed(2)}</div>
                 </div>
               )}
-              <div
-                className={`w-full rounded-t transition-colors ${hover === i ? "bg-primary" : "bg-primary/80"}`}
-                style={{ height: `${(d.revenue / maxRev) * 110}px`, minHeight: d.revenue > 0 ? 4 : 0 }}
+                            <div
+                className="w-full rounded-t transition-opacity"
+                style={{
+                  height: `${(d.revenue / maxRev) * 110}px`,
+                  minHeight: d.revenue > 0 ? 4 : 0,
+                  backgroundColor:
+                    i > 0 && stats && d.revenue >= stats.daily[i - 1].revenue
+                      ? "#2563EB" // blue — improved or same vs. previous day
+                      : "#CE1126", // red — dropped / low day
+                  opacity: hover === i ? 1 : 0.85,
+                }}
               />
               <span className="text-[10px] text-slate">{d.label}</span>
             </div>
@@ -119,18 +159,17 @@ export default function AdminOverview() {
         )}
       </div>
 
-      {/* Needs attention */}
-      <h2 className="mt-8 text-lg font-semibold">Needs attention</h2>
-      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <AttentionCard label="Stuck orders" value={stats?.attention.stuck} hint="Paid but still processing" warn={(stats?.attention.stuck ?? 0) > 0} />
-        <AttentionCard label="Failed orders" value={stats?.attention.failed} hint="May need a refund" warn={(stats?.attention.failed ?? 0) > 0} />
-        <AttentionCard label="Pending refunds" value={stats?.attention.pendingRefundCount} hint="Owed to customers" warn={(stats?.attention.pendingRefundCount ?? 0) > 0} />
-        <AttentionCard
-          label="Pending withdrawals"
-          value={stats?.attention.pendingWithdrawalCount}
-          hint={`GH₵ ${(stats?.attention.pendingWithdrawalTotal ?? 0).toFixed(2)} to pay agents`}
-          warn={(stats?.attention.pendingWithdrawalCount ?? 0) > 0}
-        />
+       {/* Needs attention */}
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Needs Attention</h2>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={resolveStuck} disabled={resolving} className="btn-secondary !py-1.5 !text-xs disabled:opacity-50">
+            {resolving ? "Resolving…" : "Resolve stuck orders (20)"}
+          </button>
+          <button onClick={resolveRefunds} disabled={resolvingRefunds} className="btn-secondary !py-1.5 !text-xs disabled:opacity-50">
+            {resolvingRefunds ? "Resolving…" : "Mark refunds resolved"}
+          </button>
+        </div>
       </div>
 
       {/* Agent commissions */}
