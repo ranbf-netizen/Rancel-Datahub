@@ -7,10 +7,12 @@ import ScrollFade from "./components/ScrollFade";
 import NetworkIllustration from "./components/NetworkIllustration";
 import LiveDeliveryAnimation from "./components/LiveDeliveryAnimation";
 import TestimonialSlider from "./components/TestimonialSlider";
+import UpdatePopup from "./components/UpdatePopup";
 
 export default function HomePage() {
   return (
     <div>
+      <UpdatePopup />
       {/* Hero - background image with dark overlay for readability */}
       <section className="relative bg-ink">
         {/* background image + overlay */}
