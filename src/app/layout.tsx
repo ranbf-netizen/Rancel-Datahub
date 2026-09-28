@@ -10,7 +10,7 @@ import Footer from "./components/Footer";
 import AnnouncementBanner from "./components/AnnouncementBanner";
 import ChromeGate, { StorefrontBar } from "./components/ChromeGate";
 import VisitTracker from "./components/VisitTracker";
-import { Signal, LogIn, UserRoundPlus } from "lucide-react";
+import { LogIn, UserRoundPlus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -36,12 +36,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}><VisitTracker /></Suspense>
         <Suspense fallback={null}>
         <ChromeGate>
-        <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper/95 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
             <Link href="/" className="flex items-center gap-2 font-display text-xl font-bold text-ink">
-  <img src="/logo.svg" alt="RanCel DataHub" className="h-9 w-9" />
-  <span>RanCel <span className="text-primary">DataHub</span></span>
-</Link>
+              <img src="/logo.svg" alt="RanCel DataHub" className="h-9 w-9" />
+              <span>RanCel <span className="text-primary">DataHub</span></span>
+            </Link>
 
             {/* Desktop nav */}
             <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">
