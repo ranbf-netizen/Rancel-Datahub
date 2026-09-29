@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 type Profile = {
   id: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
-  walletBalance: number;
+    walletBalance: number;
+  earningsBalance: number;
   discountPercent: number;
 };
 
@@ -90,9 +91,9 @@ export default function AgentDashboard() {
 
       {/* Wallet + stats */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Wallet Balance" value={`GH₵ ${profile!.walletBalance.toFixed(2)}`} highlight />
+                <StatCard label="Top-up Wallet (for orders)" value={`GH₵ ${profile!.walletBalance.toFixed(2)}`} highlight />
+        <StatCard label="Earnings (withdrawable)" value={`GH₵ ${(profile!.earningsBalance ?? 0).toFixed(2)}`} highlight />
         <StatCard label="Today's Sales" value={String(stats?.todaySalesCount ?? 0)} />
-        <StatCard label="Today's Revenue" value={`GH₵ ${(stats?.todayRevenue ?? 0).toFixed(2)}`} />
         <StatCard label="Total Profit" value={`GH₵ ${(stats?.totalProfit ?? 0).toFixed(2)}`} />
       </div>
 
@@ -105,7 +106,7 @@ export default function AgentDashboard() {
       </div>
 
       {panel === "prices" && <PriceListPanel bundles={bundles} />}
-      {panel === "withdraw" && <WithdrawPanel balance={profile!.walletBalance} onDone={() => { setPanel(null); load(); }} />}
+            {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
       {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
       {panel === "store" && <StorePanel />}
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, Smartphone, Copy, Check, Clock, XCircle, PhoneOff } from "lucide-react";
+import { Loader2, Smartphone, Copy, Check, Clock, XCircle, PhoneOff, RotateCcw, Search } from "lucide-react";
 
 // Same circular countdown used on the Gmail-reveal downloads page - green
 // while there's plenty of time, amber as it gets close, red near the end.
@@ -37,6 +37,8 @@ function RevealPanel({ reference }: { reference: string }) {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [totalSeconds, setTotalSeconds] = useState(600);
   const [copied, setCopied] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendError, setResendError] = useState("");
 
   async function poll() {
     try {
@@ -67,6 +69,27 @@ function RevealPanel({ reference }: { reference: string }) {
     const t = setTimeout(() => setSecondsLeft((s) => (s !== null ? s - 1 : s)), 1000);
     return () => clearTimeout(t);
   }, [secondsLeft, status]);
+
+  // "Request again" - the code shown turned out to be wrong, or didn't work.
+  // Same number, ask SMSPool for a fresh SMS, go back to waiting.
+  async function requestAgain() {
+    setResending(true);
+    setResendError("");
+    try {
+      const res = await fetch("/api/sms-numbers/resend", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ref: reference }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setResendError(d.error || "Could not request the code again."); return; }
+      setCopied(false);
+      setStatus("waiting");
+      poll();
+    } catch {
+      setResendError("Could not request the code again.");
+    } finally {
+      setResending(false);
+    }
+  }
 
   if (status === "loading") {
     return <p className="mt-8 inline-flex items-center gap-2 text-slate"><Loader2 size={16} className="animate-spin" /> Checking your order…</p>;
@@ -113,12 +136,24 @@ function RevealPanel({ reference }: { reference: string }) {
           <div className="mt-5">
             <p className="text-xs uppercase tracking-wide text-slate">Verification code</p>
             <p className="mt-1 font-mono text-3xl font-bold tracking-widest text-primary">{data.smsCode}</p>
-            <button
-              onClick={() => { navigator.clipboard.writeText(data.smsCode || ""); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-              className="btn-primary mt-4 inline-flex items-center gap-2"
-            >
-              {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copied" : "Copy code"}
-            </button>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <button
+                onClick={() => { navigator.clipboard.writeText(data.smsCode || ""); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                className="btn-primary inline-flex items-center gap-2"
+              >
+                {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copied" : "Copy code"}
+              </button>
+              <button
+                onClick={requestAgain}
+                disabled={resending}
+                title="Code wrong or didn't work? Get a fresh one on the same number."
+                className="btn-secondary inline-flex items-center gap-2 disabled:opacity-50"
+              >
+                {resending ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                {resending ? "Requesting…" : "Request again"}
+              </button>
+            </div>
+            {resendError && <p className="mt-2 text-xs text-ghRed">{resendError}</p>}
             {data.fullSms && <p className="mt-3 text-xs text-slate">Full message: {data.fullSms}</p>}
           </div>
         ) : (
@@ -132,6 +167,65 @@ function RevealPanel({ reference }: { reference: string }) {
       {!expired && !received && (
         <div className="flex items-center justify-center gap-1.5 border-t border-ink/5 bg-mist/60 px-4 py-2.5 text-xs text-slate">
           <Clock size={12} /> This checks for your code automatically
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Type-to-search dropdown for the service list, styled like SMSPool's own
+// picker instead of a long native <select> you have to scroll through.
+function ServiceSearch({
+  services, serviceId, onSelect,
+}: { services: Service[]; serviceId: string; onSelect: (s: Service) => void }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const selected = services.find((s) => s.ID === serviceId) || null;
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return services.slice(0, 8);
+    return services.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [services, query]);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="relative">
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate" />
+        <input
+          className="field pl-9"
+          placeholder="Search services (WhatsApp, Google, Telegram…)"
+          value={open ? query : selected?.name || query}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      {open && (
+        <div className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-ink/10 bg-white shadow-lg">
+          {results.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-slate">No matching services.</p>
+          ) : (
+            results.map((s) => (
+              <button
+                key={s.ID}
+                type="button"
+                onClick={() => { onSelect(s); setQuery(""); setOpen(false); }}
+                className={`block w-full px-3 py-2 text-left text-sm hover:bg-mist ${s.ID === serviceId ? "bg-mist font-medium text-primary" : "text-ink"}`}
+              >
+                {s.name}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -153,7 +247,6 @@ function SmsNumbersInner() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [orders, setOrders] = useState<MyOrder[]>([]);
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (ref) return; // no need to load the catalog on the reveal screen
@@ -166,11 +259,6 @@ function SmsNumbersInner() {
     }).finally(() => setLoading(false));
     fetch("/api/sms-numbers/order").then((r) => r.ok ? r.json() : null).then((d) => { if (d?.orders) setOrders(d.orders); }).catch(() => {});
   }, [ref]);
-
-  const filteredServices = useMemo(() => {
-    if (!search.trim()) return services;
-    return services.filter((s) => s.name.toLowerCase().includes(search.trim().toLowerCase()));
-  }, [services, search]);
 
   useEffect(() => {
     setPrice(null);
@@ -234,11 +322,7 @@ function SmsNumbersInner() {
       {!loading && countries.length > 0 && (
         <div className="card mt-6">
           <label className="label">Service</label>
-          <input className="field mb-2" placeholder="Search services (WhatsApp, Google, Telegram…)" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <select className="field" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
-            <option value="">Choose a service…</option>
-            {filteredServices.map((s) => <option key={s.ID} value={s.ID}>{s.name}</option>)}
-          </select>
+          <ServiceSearch services={services} serviceId={serviceId} onSelect={(s) => setServiceId(s.ID)} />
 
           <label className="label mt-4">Country</label>
           <select className="field" value={countryId} onChange={(e) => setCountryId(e.target.value)}>

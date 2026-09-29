@@ -77,8 +77,8 @@ export async function fulfillDataOrder(reference: string) {
   }
 }
 
-// Credit an agent's storefront commission to their wallet. Idempotent: only
-// credits when no commission transaction already exists for this reference.
+// Credit an agent's storefront commission to their EARNINGS balance (withdrawable).
+// Idempotent: only credits when no commission transaction already exists for this reference.
 async function creditAgentCommission(
   order: { referredByAgentId: string | null; agentCommission: number | null; bundle: { dataSizeGb: number; network: string } },
   reference: string
@@ -89,7 +89,7 @@ async function creditAgentCommission(
   await prisma.$transaction([
     prisma.agentProfile.update({
       where: { id: order.referredByAgentId },
-      data: { walletBalance: { increment: order.agentCommission } },
+      data: { earningsBalance: { increment: order.agentCommission } },
     }),
     prisma.agentTransaction.create({
       data: {
@@ -120,7 +120,7 @@ async function clawbackAgentCommission(
   await prisma.$transaction([
     prisma.agentProfile.update({
       where: { id: order.referredByAgentId },
-      data: { walletBalance: { decrement: order.agentCommission } },
+      data: { earningsBalance: { decrement: order.agentCommission } },
     }),
     prisma.agentTransaction.create({
       data: {

@@ -23,12 +23,12 @@ export async function POST(req: NextRequest) {
   if (!profile || profile.status !== "APPROVED") {
     return NextResponse.json({ error: "You need an approved agent account first." }, { status: 403 });
   }
-  if (profile.walletBalance < amountGhs) {
-    return NextResponse.json({ error: "Insufficient wallet balance." }, { status: 402 });
+    if (profile.earningsBalance < amountGhs) {
+    return NextResponse.json({ error: "Insufficient earnings balance." }, { status: 402 });
   }
 
   const [, txn] = await prisma.$transaction([
-    prisma.agentProfile.update({ where: { id: profile.id }, data: { walletBalance: { decrement: amountGhs } } }),
+    prisma.agentProfile.update({ where: { id: profile.id }, data: { earningsBalance: { decrement: amountGhs } } }),
     prisma.agentTransaction.create({
       data: { agentId: profile.id, type: "WITHDRAWAL", amount: -amountGhs, status: "PENDING", description: "Withdrawal requested" },
     }),

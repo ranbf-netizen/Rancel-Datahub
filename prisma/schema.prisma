@@ -152,7 +152,8 @@ model AgentProfile {
   id              String             @id @default(uuid())
   userId          String             @unique
   status          AgentStatus        @default(PENDING)
-  walletBalance   Float              @default(0)
+    walletBalance   Float              @default(0)
+  earningsBalance Float              @default(0)
   discountPercent Float              @default(10)
   createdAt       DateTime           @default(now())
   storeMarkup     Float              @default(0)

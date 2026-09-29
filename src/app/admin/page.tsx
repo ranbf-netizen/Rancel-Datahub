@@ -159,7 +159,7 @@ export default function AdminOverview() {
         )}
       </div>
 
-       {/* Needs attention */}
+              {/* Needs attention */}
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Needs Attention</h2>
         <div className="flex flex-wrap gap-2">
@@ -170,6 +170,18 @@ export default function AdminOverview() {
             {resolvingRefunds ? "Resolving…" : "Mark refunds resolved"}
           </button>
         </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <AttentionCard label="Stuck orders" value={stats?.attention.stuck} hint="Paid but still processing" warn={(stats?.attention.stuck ?? 0) > 0} />
+        <AttentionCard label="Failed orders" value={stats?.attention.failed} hint="May need a refund" warn={(stats?.attention.failed ?? 0) > 0} />
+        <AttentionCard label="Pending refunds" value={stats?.attention.pendingRefundCount} hint="Owed to customers" warn={(stats?.attention.pendingRefundCount ?? 0) > 0} />
+        <AttentionCard
+          label="Pending withdrawals"
+          value={stats?.attention.pendingWithdrawalCount}
+          hint={`GH₵ ${(stats?.attention.pendingWithdrawalTotal ?? 0).toFixed(2)} to pay agents`}
+          warn={(stats?.attention.pendingWithdrawalCount ?? 0) > 0}
+        />
       </div>
 
       {/* Agent commissions */}

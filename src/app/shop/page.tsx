@@ -207,53 +207,54 @@ export default function ShopPage() {
         />
       </div>
 
-      {/* Social Media Boosting feature entry */}
-      <Link
-        href="/shop/boosting"
-        className="card hover-lift mb-6 flex items-center gap-4 overflow-hidden !p-0"
-      >
-        <div className="h-28 w-40 shrink-0">
-          <BoostingGraphic />
-        </div>
+      {/* Social Media Boosting + SMS Numbers - one row, square-ish cards so they sit side by side on mobile too */}
+      <div className="mb-6 grid grid-cols-2 gap-3">
+        <Link
+          href="/shop/boosting"
+          className="card hover-lift flex flex-col overflow-hidden !p-0"
+        >
+          <div className="aspect-square w-full">
+            <BoostingGraphic />
+          </div>
 
-        <div className="py-3 pr-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-            Social Media Boosting
-          </p>
+          <div className="p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+              Boosting
+            </p>
 
-          <p className="mt-0.5 font-semibold text-ink">
-            Grow your Instagram, TikTok, YouTube &amp; more
-          </p>
+            <p className="mt-0.5 text-sm font-semibold leading-snug text-ink">
+              Followers, likes &amp; views
+            </p>
 
-          <p className="mt-0.5 text-sm text-slate">
-            Followers, likes, views — auto-delivered. Tap to browse services →
-          </p>
-        </div>
-      </Link>
+            <p className="mt-0.5 text-xs text-slate">
+              Tap to browse →
+            </p>
+          </div>
+        </Link>
 
-      {/* SMS Numbers feature entry */}
-      <Link
-        href="/shop/sms-numbers"
-        className="card hover-lift mb-6 flex items-center gap-4 overflow-hidden !p-0"
-      >
-        <div className="h-28 w-40 shrink-0 overflow-hidden">
-          <SmsNumbersGraphic />
-        </div>
+        <Link
+          href="/shop/sms-numbers"
+          className="card hover-lift flex flex-col overflow-hidden !p-0"
+        >
+          <div className="aspect-square w-full overflow-hidden">
+            <SmsNumbersGraphic />
+          </div>
 
-        <div className="py-3 pr-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-            SMS Numbers
-          </p>
+          <div className="p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+              SMS Numbers
+            </p>
 
-          <p className="mt-0.5 font-semibold text-ink">
-            Rent a number for SMS verification
-          </p>
+            <p className="mt-0.5 text-sm font-semibold leading-snug text-ink">
+              Rent a verification number
+            </p>
 
-          <p className="mt-0.5 text-sm text-slate">
-            WhatsApp, Google, Telegram &amp; more — code shows up live. Tap to browse →
-          </p>
-        </div>
-      </Link>
+            <p className="mt-0.5 text-xs text-slate">
+              Tap to browse →
+            </p>
+          </div>
+        </Link>
+      </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {categories.map((c) => (
