@@ -5,7 +5,7 @@ import Link from "next/link";
 import LogoutButton from "./LogoutButton";
 import {
   Menu, X, Wifi, PackageSearch, UserPlus, GraduationCap, Sprout,
-  Megaphone, Sparkles, ShoppingBag, LayoutDashboard, Shield, LogIn, UserRoundPlus,
+  Megaphone, Sparkles, ShoppingBag, LayoutDashboard, Shield, LogIn, UserRoundPlus, Code2
 } from "lucide-react";
 
 type Session = { role: "CUSTOMER" | "ADMIN" } | null;
@@ -61,6 +61,7 @@ export default function MobileNav({ session }: { session: Session }) {
           <Link href="/afa" onClick={close} className={link}><Sprout size={18} className="text-primary" /> AFA Registration</Link>
           <Link href="/updates" onClick={close} className={link}><Megaphone size={18} className="text-primary" /> Updates</Link>
           <Link href="/tools" onClick={close} className={link}><Sparkles size={18} className="text-primary" /> AI Tools</Link>
+          <Link href="/api-docs" onClick={close} className={link}><Code2 size={18} className="text-primary" /> API</Link>
           <Link href="/shop" onClick={close} className={link}><ShoppingBag size={18} className="text-primary" /> Shop</Link>
           {session ? (
             <>

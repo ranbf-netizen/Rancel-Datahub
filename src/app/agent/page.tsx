@@ -16,7 +16,7 @@ type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerC
 type StoreOrder = { id: string; dataSizeGb: number; network: string; beneficiaryNumber: string; amount: number; commission: number; paymentStatus: string; fulfillmentStatus: string; createdAt: string };
 type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
 
-type ActivePanel = "prices" | "withdraw" | "afa" | "store" | null;
+type ActivePanel = "prices" | "withdraw" | "afa" | "store" | "api" | null;
 
 export default function AgentDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -102,13 +102,15 @@ export default function AgentDashboard() {
         <button onClick={() => setPanel(panel === "prices" ? null : "prices")} className="btn-primary">Price List</button>
         <button onClick={() => setPanel(panel === "afa" ? null : "afa")} className="btn-secondary">Create AFA Offer</button>
         <button onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")} className="btn-secondary">Withdraw</button>
-        <button onClick={() => setPanel(panel === "store" ? null : "store")} className="btn-secondary">My Store</button>
+                <button onClick={() => setPanel(panel === "store" ? null : "store")} className="btn-secondary">My Store</button>
+        <button onClick={() => setPanel(panel === "api" ? null : "api")} className="btn-secondary">API Access</button>
       </div>
 
       {panel === "prices" && <PriceListPanel bundles={bundles} />}
             {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
       {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
-      {panel === "store" && <StorePanel />}
+            {panel === "store" && <StorePanel />}
+      {panel === "api" && <ApiKeyPanel />}
 
       {/* AFA Services */}
       <h2 className="mt-10 text-lg font-semibold">AFA Services</h2>
@@ -427,5 +429,89 @@ function StorePanel() {
         </div>
       )}
     </form>
+  );
+}
+
+function ApiKeyPanel() {
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [active, setActive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function load() {
+    fetch("/api/agents/api-key")
+      .then((r) => r.json())
+      .then((d) => { setApiKey(d.key); setActive(d.active); })
+      .finally(() => setLoading(false));
+  }
+  useEffect(load, []);
+
+  async function generate() {
+    if (apiKey && !confirm("Generate a new key? Your old key will stop working immediately.")) return;
+    setWorking(true);
+    const r = await fetch("/api/agents/api-key", { method: "POST" });
+    const d = await r.json();
+    setWorking(false);
+    if (d.key) { setApiKey(d.key); setActive(true); }
+    else alert(d.error || "Could not generate key.");
+  }
+
+  async function revoke() {
+    if (!confirm("Revoke your API key? Any system using it will stop working.")) return;
+    setWorking(true);
+    await fetch("/api/agents/api-key", { method: "DELETE" });
+    setWorking(false);
+    setActive(false);
+    setApiKey(null);
+  }
+
+  return (
+    <div className="card mt-6">
+      <h3 className="text-lg font-semibold">API Access</h3>
+      <p className="mt-1 text-sm text-slate">
+        Use your API key to sell data bundles from your own website or app. You&rsquo;re billed from
+        your top-up wallet at reseller cost — set your own selling price to your customers.
+      </p>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-slate">Loading…</p>
+      ) : apiKey && active ? (
+        <>
+          <label className="label mt-4">Your API key</label>
+          <div className="flex gap-2">
+            <input readOnly value={apiKey} className="field font-mono text-xs" />
+            <button
+              onClick={() => { navigator.clipboard.writeText(apiKey); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+              className="btn-secondary shrink-0 !py-2 !text-sm"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-ghRed">Keep this secret — anyone with it can place orders billed to your wallet.</p>
+
+          <div className="mt-4 flex gap-2">
+            <button onClick={generate} disabled={working} className="btn-secondary !py-2 !text-sm disabled:opacity-50">
+              {working ? "Working…" : "Regenerate"}
+            </button>
+            <button onClick={revoke} disabled={working} className="rounded-xl border border-ghRed/30 px-4 py-2 text-sm font-semibold text-ghRed hover:bg-ghRed/5 disabled:opacity-50">
+              Revoke
+            </button>
+          </div>
+        </>
+      ) : (
+        <button onClick={generate} disabled={working} className="btn-primary mt-4 disabled:opacity-50">
+          {working ? "Generating…" : "Generate API key"}
+        </button>
+      )}
+
+      <div className="mt-6 rounded-lg bg-mist p-4 text-xs text-ink/70">
+        <p className="font-semibold text-ink">Quick start</p>
+        <p className="mt-2">Get bundles &amp; your reseller prices (sync anytime):</p>
+        <pre className="mt-1 overflow-x-auto rounded bg-white p-2">GET /api/v1/bundles
+Authorization: Bearer YOUR_API_KEY</pre>
+        <p className="mt-2">See the full docs on the <a href="/api-docs" className="text-primary hover:underline">API page</a>.</p>
+      </div>
+    </div>
   );
 }

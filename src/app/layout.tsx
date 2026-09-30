@@ -43,16 +43,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span>RanCel <span className="text-primary">DataHub</span></span>
             </Link>
 
-            {/* Desktop nav */}
-            <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">
+                        {/* Desktop nav */}
+            <nav className="hidden items-center gap-4 text-sm font-medium lg:flex">
               <Link href="/data" className="hover:text-primary">Buy Data</Link>
-              <Link href="/track" className="hover:text-primary">Track</Link>
-              <Link href="/agents" className="hover:text-primary">Agents</Link>
-              <Link href="/results" className="hover:text-primary">Results</Link>
-              <Link href="/afa" className="hover:text-primary">AFA</Link>
-              <Link href="/updates" className="hover:text-primary">Updates</Link>
-              <Link href="/tools" className="hover:text-primary">AI Tools</Link>
               <Link href="/shop" className="hover:text-primary">Shop</Link>
+              <Link href="/tools" className="hover:text-primary">AI Tools</Link>
+              <Link href="/track" className="hover:text-primary">Track</Link>
+
+              {/* More dropdown for the rest */}
+              <div className="group relative">
+                <button className="inline-flex items-center gap-1 hover:text-primary">More ▾</button>
+                <div className="invisible absolute left-0 top-full z-50 w-44 rounded-xl border border-ink/10 bg-white py-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                  <Link href="/agents" className="block px-4 py-2 hover:bg-mist">Agents</Link>
+                  <Link href="/results" className="block px-4 py-2 hover:bg-mist">Results</Link>
+                  <Link href="/afa" className="block px-4 py-2 hover:bg-mist">AFA</Link>
+                  <Link href="/updates" className="block px-4 py-2 hover:bg-mist">Updates</Link>
+                  <Link href="/api-docs" className="block px-4 py-2 hover:bg-mist">API</Link>
+                </div>
+              </div>
 
               {/* divider between browse links and account actions */}
               <span className="h-5 w-px bg-ink/15" />
@@ -77,7 +85,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </>
               )}
             </nav>
-
             {/* Mobile nav */}
             <MobileNav session={session} />
           </div>

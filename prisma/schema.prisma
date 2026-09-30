@@ -158,10 +158,11 @@ model AgentProfile {
   createdAt       DateTime           @default(now())
   storeMarkup     Float              @default(0)
   storeSlug       String?            @unique
-  afaOrders       AfaOrder[]
+    afaOrders       AfaOrder[]
   user            User               @relation(fields: [userId], references: [id])
   sales           AgentSale[]
   transactions    AgentTransaction[]
+  apiKey          ApiKey?
 }
 
 model AgentTransaction {
@@ -368,3 +369,18 @@ model SmsPoolSettings {
   markupPct Float  @default(40)
   usdToGhs  Float  @default(14)
 }
+
+
+
+// API key for reseller/agent API access. Tied to an agent; orders placed with
+// this key bill that agent's top-up wallet and use their reseller pricing.
+model ApiKey {
+  id        String   @id @default(uuid())
+  agentId   String   @unique
+  agent     AgentProfile @relation(fields: [agentId], references: [id])
+  key       String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime?
+}
+
