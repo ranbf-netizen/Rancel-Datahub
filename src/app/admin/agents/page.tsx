@@ -6,6 +6,7 @@ type Agent = {
   id: string;
   status: string;
   walletBalance: number;
+  earningsBalance: number;
   discountPercent: number;
   user: { name: string; email: string; phone: string };
 };
@@ -85,7 +86,7 @@ export default function AdminAgentsPage() {
         <table className="w-full min-w-[680px] text-sm">
           <thead>
             <tr className="border-b border-ink/10 text-left text-xs uppercase text-slate">
-              <th className="py-2">Name</th><th>Phone</th><th>Wallet</th><th>Discount %</th><th>Status</th><th></th>
+              <th className="py-2">Name</th><th>Phone</th><th>Wallet</th><th>Earnings</th><th>Discount %</th><th>Status</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -94,6 +95,7 @@ export default function AdminAgentsPage() {
                 <td className="py-2">{a.user.name}</td>
                 <td>{a.user.phone}</td>
                 <td>GH₵ {a.walletBalance.toFixed(2)}</td>
+                <td className="text-primary">GH₵ {(a.earningsBalance ?? 0).toFixed(2)}</td>
                 <td>
                   <input
                     type="number"
