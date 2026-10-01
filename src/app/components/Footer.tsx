@@ -1,6 +1,13 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function Footer() {
+  const pathname = usePathname();
+  // No footer on the auth pages
+  if (pathname === "/login" || pathname === "/register") return null;
+
   return (
     <footer className="mt-20 border-t border-ink/10 bg-mist">
       <div className="mx-auto grid max-w-5xl grid-cols-2 gap-8 px-5 py-12 md:grid-cols-5">
