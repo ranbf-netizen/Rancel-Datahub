@@ -21,7 +21,7 @@ export default function HomePage() {
           style={{ backgroundImage: "url('/hero-bg.jpg')" }}
           aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-ink/80" aria-hidden="true" />
+        <div className="absolute inset-0 bg-black/85" aria-hidden="true" />
 
         <div className="relative mx-auto grid max-w-6xl gap-12 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div>
