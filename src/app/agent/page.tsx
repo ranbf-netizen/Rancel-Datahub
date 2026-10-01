@@ -90,21 +90,51 @@ export default function AgentDashboard() {
       <h1 className="text-2xl font-bold">Agent Dashboard</h1>
 
       {/* Wallet + stats */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard label="Top-up Wallet (for orders)" value={`GH₵ ${profile!.walletBalance.toFixed(2)}`} highlight />
         <StatCard label="Earnings (withdrawable)" value={`GH₵ ${(profile!.earningsBalance ?? 0).toFixed(2)}`} highlight />
         <StatCard label="Today's Sales" value={String(stats?.todaySalesCount ?? 0)} />
         <StatCard label="Total Profit" value={`GH₵ ${(stats?.totalProfit ?? 0).toFixed(2)}`} />
       </div>
 
-      {/* Quick actions */}
-      <div className="mt-6 flex flex-wrap gap-3">
-        <button onClick={() => setPanel(panel === "prices" ? null : "prices")} className="btn-primary">Price List</button>
-        <button onClick={() => setPanel(panel === "afa" ? null : "afa")} className="btn-secondary">Create AFA Offer</button>
-        <button onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")} className="btn-secondary">Withdraw</button>
-                <button onClick={() => setPanel(panel === "store" ? null : "store")} className="btn-secondary">My Store</button>
-        <button onClick={() => setPanel(panel === "api" ? null : "api")} className="btn-secondary">API Access</button>
-      </div>
+     {/* Quick actions */}
+<div className="mt-4 flex flex-nowrap gap-3 overflow-x-auto pb-2">
+  <button
+    onClick={() => setPanel(panel === "prices" ? null : "prices")}
+    className="btn-primary shrink-0 whitespace-nowrap"
+  >
+    Price List
+  </button>
+
+  <button
+    onClick={() => setPanel(panel === "afa" ? null : "afa")}
+    className="btn-secondary shrink-0 whitespace-nowrap"
+  >
+    Create AFA Offer
+  </button>
+
+  <button
+    onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")}
+    className="btn-secondary shrink-0 whitespace-nowrap"
+  >
+    Withdraw
+  </button>
+
+  <button
+    onClick={() => setPanel(panel === "store" ? null : "store")}
+    className="btn-secondary shrink-0 whitespace-nowrap"
+  >
+    My Store
+  </button>
+
+  <button
+    onClick={() => setPanel(panel === "api" ? null : "api")}
+    className="btn-secondary shrink-0 whitespace-nowrap"
+  >
+    API Access
+  </button>
+</div>
 
       {panel === "prices" && <PriceListPanel bundles={bundles} />}
             {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
