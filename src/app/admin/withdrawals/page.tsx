@@ -12,10 +12,13 @@ type Withdrawal = {
   createdAt: string;
 };
 
+const PER_PAGE = 10;
+
 export default function AdminWithdrawals() {
   const [rows, setRows] = useState<Withdrawal[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   function load() {
     setLoading(true);
@@ -39,13 +42,12 @@ export default function AdminWithdrawals() {
   }
 
   const pending = rows.filter((r) => r.status === "PENDING");
+  const totalPages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
+  const slice = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
       <h1 className="text-2xl font-bold">Agent Withdrawals</h1>
-      {/*<p className="mt-1 text-sm text-slate">
-        Pay the agent by momo/bank outside the platform, then mark the request as paid here for your records.
-      </p>*/}
 
       {pending.length > 0 && (
         <p className="mt-4 rounded-lg bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-700">
@@ -62,7 +64,7 @@ export default function AdminWithdrawals() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {slice.map((r) => (
               <tr key={r.id} className="border-b border-ink/5">
                 <td className="py-2 whitespace-nowrap">{new Date(r.createdAt).toLocaleString()}</td>
                 <td>{r.agentName}</td>
@@ -91,6 +93,21 @@ export default function AdminWithdrawals() {
         </table>
         {loading && <p className="mt-3 text-sm text-slate">Loading…</p>}
         {!loading && rows.length === 0 && <p className="mt-3 text-sm text-slate">No withdrawal requests yet.</p>}
+        <Pager page={page} totalPages={totalPages} onChange={setPage} count={rows.length} />
+      </div>
+    </div>
+  );
+}
+
+function Pager({ page, totalPages, onChange, count }: { page: number; totalPages: number; onChange: (p: number) => void; count: number }) {
+  if (count === 0) return null;
+  return (
+    <div className="mt-3 flex items-center justify-between text-sm">
+      <span className="text-slate">{count} request{count === 1 ? "" : "s"}</span>
+      <div className="flex items-center gap-3">
+        <span className="text-slate">Page {page} of {totalPages}</span>
+        <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Prev</button>
+        <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Next</button>
       </div>
     </div>
   );

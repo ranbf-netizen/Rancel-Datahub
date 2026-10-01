@@ -61,6 +61,7 @@ const EMPTY = {
 
 export default function AdminDigitalProducts() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [productsPage, setProductsPage] = useState(1);
   const [form, setForm] = useState({ ...EMPTY });
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -272,6 +273,17 @@ export default function AdminDigitalProducts() {
   }
 
   const isBoosting = form.productType === "BOOSTING";
+
+  // Client-side pagination over the already-loaded product list - this page
+  // fetches everything in one call (no server-side paging), so we just
+  // slice it here rather than re-fetching per page.
+  const PRODUCTS_PER_PAGE = 10;
+  const totalProductPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
+  const clampedProductsPage = Math.min(productsPage, totalProductPages);
+  const pagedProducts = products.slice(
+    (clampedProductsPage - 1) * PRODUCTS_PER_PAGE,
+    clampedProductsPage * PRODUCTS_PER_PAGE
+  );
 
   return (
     <div>
@@ -862,7 +874,7 @@ export default function AdminDigitalProducts() {
           </thead>
 
           <tbody>
-            {products.map((p) => (
+            {pagedProducts.map((p) => (
               <tr
                 key={p.id}
                 className="border-b border-ink/5"
@@ -967,6 +979,33 @@ export default function AdminDigitalProducts() {
         <p className="mt-6 text-sm text-slate">
           No products yet — add one above.
         </p>
+      )}
+
+      {products.length > PRODUCTS_PER_PAGE && (
+        <div className="mt-3 flex items-center justify-between text-sm">
+          <span className="text-slate">
+            {products.length} product{products.length === 1 ? "" : "s"}
+          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-slate">
+              Page {clampedProductsPage} of {totalProductPages}
+            </span>
+            <button
+              onClick={() => setProductsPage((p) => Math.max(1, p - 1))}
+              disabled={clampedProductsPage <= 1}
+              className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setProductsPage((p) => Math.min(totalProductPages, p + 1))}
+              disabled={clampedProductsPage >= totalProductPages}
+              className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 type Profile = {
   id: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
-    walletBalance: number;
+  walletBalance: number;
   earningsBalance: number;
   discountPercent: number;
 };
@@ -16,7 +16,9 @@ type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerC
 type StoreOrder = { id: string; dataSizeGb: number; network: string; beneficiaryNumber: string; amount: number; commission: number; paymentStatus: string; fulfillmentStatus: string; createdAt: string };
 type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
 
-type ActivePanel = "prices" | "withdraw" | "afa" | "store" | "api" | null;
+type ActivePanel = "prices" | "topup" | "withdraw" | "afa" | "store" | "api" | null;
+
+const PER_PAGE = 10;
 
 export default function AgentDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -30,6 +32,12 @@ export default function AgentDashboard() {
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState<ActivePanel>(null);
   const [notApplied, setNotApplied] = useState(false);
+
+  // pagination
+  const [afaPage, setAfaPage] = useState(1);
+  const [salesPage, setSalesPage] = useState(1);
+  const [recentSalesPage, setRecentSalesPage] = useState(1);
+  const [txPage, setTxPage] = useState(1);
 
   function load() {
     fetch("/api/agents/me")
@@ -64,7 +72,7 @@ export default function AgentDashboard() {
   if (notApplied) {
     return (
       <div className="mx-auto max-w-lg px-5 py-20 text-center">
-        <h1 className="text-2xl font-bold">You haven't applied yet</h1>
+        <h1 className="text-2xl font-bold">You haven&rsquo;t applied yet</h1>
         <p className="mt-3 text-slate">Head to the Agents page to apply for a RanCel Agent account.</p>
         <a href="/agents" className="btn-primary mt-6 inline-flex">Become an Agent</a>
       </div>
@@ -85,69 +93,48 @@ export default function AgentDashboard() {
     );
   }
 
+  const afaSlice = afaOffers.slice((afaPage - 1) * PER_PAGE, afaPage * PER_PAGE);
+  const storeSlice = storeOrders.slice((salesPage - 1) * PER_PAGE, salesPage * PER_PAGE);
+  const recentSalesSlice = sales.slice((recentSalesPage - 1) * PER_PAGE, recentSalesPage * PER_PAGE);
+  const txSlice = transactions.slice((txPage - 1) * PER_PAGE, txPage * PER_PAGE);
+
   return (
     <div className="mx-auto max-w-5xl px-5 py-10">
       <h1 className="text-2xl font-bold">Agent Dashboard</h1>
 
       {/* Wallet + stats */}
-      
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <StatCard label="Top-up Wallet (for orders)" value={`GH₵ ${profile!.walletBalance.toFixed(2)}`} highlight />
+        <StatCard label="Top-up Wallet (for orders)" value={`GH₵ ${profile!.walletBalance.toFixed(2)}`} highlight />
         <StatCard label="Earnings (withdrawable)" value={`GH₵ ${(profile!.earningsBalance ?? 0).toFixed(2)}`} highlight />
         <StatCard label="Today's Sales" value={String(stats?.todaySalesCount ?? 0)} />
         <StatCard label="Total Profit" value={`GH₵ ${(stats?.totalProfit ?? 0).toFixed(2)}`} />
       </div>
 
-     {/* Quick actions */}
-<div className="mt-4 flex flex-nowrap gap-3 overflow-x-auto pb-2">
-  <button
-    onClick={() => setPanel(panel === "prices" ? null : "prices")}
-    className="btn-primary shrink-0 whitespace-nowrap"
-  >
-    Price List
-  </button>
-
-  <button
-    onClick={() => setPanel(panel === "afa" ? null : "afa")}
-    className="btn-secondary shrink-0 whitespace-nowrap"
-  >
-    Create AFA Offer
-  </button>
-
-  <button
-    onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")}
-    className="btn-secondary shrink-0 whitespace-nowrap"
-  >
-    Withdraw
-  </button>
-
-  <button
-    onClick={() => setPanel(panel === "store" ? null : "store")}
-    className="btn-secondary shrink-0 whitespace-nowrap"
-  >
-    My Store
-  </button>
-
-  <button
-    onClick={() => setPanel(panel === "api" ? null : "api")}
-    className="btn-secondary shrink-0 whitespace-nowrap"
-  >
-    API Access
-  </button>
-</div>
+      {/* Quick actions */}
+      <div className="mt-4 flex flex-nowrap gap-3 overflow-x-auto pb-2">
+        <button onClick={() => setPanel(panel === "topup" ? null : "topup")} className="btn-primary shrink-0 whitespace-nowrap">Top Up Wallet</button>
+        <button onClick={() => setPanel(panel === "prices" ? null : "prices")} className="btn-primary shrink-0 whitespace-nowrap">Price List</button>
+        <button onClick={() => setPanel(panel === "afa" ? null : "afa")} className="btn-secondary shrink-0 whitespace-nowrap">Create AFA Offer</button>
+        <button onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")} className="btn-secondary shrink-0 whitespace-nowrap">Withdraw</button>
+        <button onClick={() => setPanel(panel === "store" ? null : "store")} className="btn-secondary shrink-0 whitespace-nowrap">My Store</button>
+        <button onClick={() => setPanel(panel === "api" ? null : "api")} className="btn-secondary shrink-0 whitespace-nowrap">API Access</button>
+      </div>
 
       {panel === "prices" && <PriceListPanel bundles={bundles} />}
-            {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
+              {panel === "topup" && <TopUpPanel />}
+      {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
+      {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
       {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
-            {panel === "store" && <StorePanel />}
+      {panel === "store" && <StorePanel />}
       {panel === "api" && <ApiKeyPanel />}
 
       {/* AFA Services */}
-      <h2 className="mt-10 text-lg font-semibold">AFA Services</h2>
-      <div className="card mt-3 border-primary/25 bg-primary/5">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate">Current AFA Price</p>
-        <p className="mt-1 text-xl font-bold text-primary">GH₵ {afaPrice.toFixed(2)}</p>
-        <p className="mt-1 text-xs text-slate">Set by your admin — deducted from your wallet per offer.</p>
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">AFA Services</h2>
+        <div className="inline-flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-slate">Current AFA Price</span>
+          <span className="text-lg font-bold text-primary">GH₵ {afaPrice.toFixed(2)}</span>
+        </div>
       </div>
 
       <div className="mt-4 overflow-x-auto">
@@ -158,7 +145,7 @@ export default function AgentDashboard() {
             </tr>
           </thead>
           <tbody>
-            {afaOffers.map((o) => (
+            {afaSlice.map((o) => (
               <tr key={o.id} className="border-b border-ink/5">
                 <td className="py-2">{o.fullName}</td>
                 <td>{o.phoneNumber}</td>
@@ -172,10 +159,11 @@ export default function AgentDashboard() {
         </table>
         {afaOffers.length === 0 && <p className="mt-3 text-sm text-slate">No AFA offers yet.</p>}
       </div>
+      <Pager page={afaPage} totalPages={Math.max(1, Math.ceil(afaOffers.length / PER_PAGE))} onChange={setAfaPage} count={afaOffers.length} />
 
-      {/* Store sales (orders customers placed through the agent's storefront link) */}
+      {/* Store sales */}
       <h2 className="mt-10 text-lg font-semibold">Store Sales</h2>
-      <p className="text-xs text-slate">Orders customers placed through your store link. Commission is added to your wallet once an order is delivered.</p>
+      <p className="text-xs text-slate">Orders customers placed through your store link. Commission is added to your earnings once an order is delivered.</p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[620px] text-sm">
           <thead>
@@ -184,7 +172,7 @@ export default function AgentDashboard() {
             </tr>
           </thead>
           <tbody>
-            {storeOrders.map((o) => {
+            {storeSlice.map((o) => {
               const delivered = o.fulfillmentStatus === "DELIVERED";
               const failed = o.fulfillmentStatus === "FAILED";
               const unpaid = o.paymentStatus !== "PAID";
@@ -205,6 +193,7 @@ export default function AgentDashboard() {
         </table>
         {storeOrders.length === 0 && <p className="mt-3 text-sm text-slate">No store sales yet. Share your store link to start earning commission.</p>}
       </div>
+      <Pager page={salesPage} totalPages={Math.max(1, Math.ceil(storeOrders.length / PER_PAGE))} onChange={setSalesPage} count={storeOrders.length} />
 
       {/* Recent sales */}
       <h2 className="mt-10 text-lg font-semibold">Recent Sales</h2>
@@ -216,7 +205,7 @@ export default function AgentDashboard() {
             </tr>
           </thead>
           <tbody>
-            {sales.map((s) => (
+            {recentSalesSlice.map((s) => (
               <tr key={s.id} className="border-b border-ink/5">
                 <td className="py-2">{s.beneficiaryNumber}</td>
                 <td>GH₵ {s.resellerCost.toFixed(2)}</td>
@@ -229,11 +218,12 @@ export default function AgentDashboard() {
         </table>
         {sales.length === 0 && <p className="mt-3 text-sm text-slate">No sales yet.</p>}
       </div>
+      <Pager page={recentSalesPage} totalPages={Math.max(1, Math.ceil(sales.length / PER_PAGE))} onChange={setRecentSalesPage} count={sales.length} />
 
       {/* Recent transactions */}
       <h2 className="mt-10 text-lg font-semibold">Recent Transactions</h2>
       <div className="mt-3 space-y-2">
-        {transactions.map((t) => (
+        {txSlice.map((t) => (
           <div key={t.id} className="card flex items-center justify-between text-sm">
             <div>
               <p className="font-medium">{t.description || t.type}</p>
@@ -245,6 +235,21 @@ export default function AgentDashboard() {
           </div>
         ))}
         {transactions.length === 0 && <p className="text-sm text-slate">No transactions yet.</p>}
+      </div>
+      <Pager page={txPage} totalPages={Math.max(1, Math.ceil(transactions.length / PER_PAGE))} onChange={setTxPage} count={transactions.length} />
+    </div>
+  );
+}
+
+function Pager({ page, totalPages, onChange, count }: { page: number; totalPages: number; onChange: (p: number) => void; count: number }) {
+  if (count === 0) return null;
+  return (
+    <div className="mt-3 flex items-center justify-between text-sm">
+      <span className="text-slate">{count} total</span>
+      <div className="flex items-center gap-3">
+        <span className="text-slate">Page {page} of {totalPages}</span>
+        <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Prev</button>
+        <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Next</button>
       </div>
     </div>
   );
@@ -323,8 +328,8 @@ function WithdrawPanel({ balance, onDone }: { balance: number; onDone: () => voi
 
   return (
     <form onSubmit={submit} className="card mt-4 max-w-md space-y-3">
-      <p className="text-sm font-semibold">Withdraw</p>
-      <p className="text-xs text-slate">Available: GH₵ {balance.toFixed(2)}</p>
+      <p className="text-sm font-semibold">Withdraw earnings</p>
+      <p className="text-xs text-slate">Available to withdraw: GH₵ {balance.toFixed(2)} · Minimum GH₵ 10</p>
       <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount (GH₵)" type="number" step="0.01" className="field" required />
       <p className="text-xs text-slate">We'll settle this to you manually — usually within 24 hours.</p>
       {error && <p className="text-sm text-ghRed">{error}</p>}
@@ -418,7 +423,7 @@ function StorePanel() {
       <p className="text-sm font-semibold">My Store</p>
       <p className="mt-1 text-xs text-slate">
         Get a public link customers buy from. You earn a fixed 4.7% commission on every delivered
-        order, added straight to your wallet.
+        order, added straight to your earnings.
       </p>
 
       <label className="label mt-4">Store name (your link)</label>
@@ -543,5 +548,38 @@ Authorization: Bearer YOUR_API_KEY</pre>
         <p className="mt-2">See the full docs on the <a href="/api-docs" className="text-primary hover:underline">API page</a>.</p>
       </div>
     </div>
+  );
+}
+
+function TopUpPanel() {
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const res = await fetch("/api/agents/topup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount }),
+    });
+    const data = await res.json();
+    if (data.authorizationUrl) { window.location.href = data.authorizationUrl; return; }
+    setLoading(false);
+    setError(data.error || "Could not start top-up.");
+  }
+
+  return (
+    <form onSubmit={submit} className="card mt-4 max-w-md space-y-3">
+      <p className="text-sm font-semibold">Top up your wallet</p>
+      <p className="text-xs text-slate">Fund your top-up wallet via Paystack (mobile money or card). This balance pays for your orders.</p>
+      <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount (GH₵)" type="number" step="0.01" min="1" className="field" required />
+      {error && <p className="text-sm text-ghRed">{error}</p>}
+      <button className="btn-primary inline-flex w-full items-center justify-center gap-2" disabled={loading}>
+        {loading ? "Starting payment…" : "Continue to Payment"}
+      </button>
+    </form>
   );
 }

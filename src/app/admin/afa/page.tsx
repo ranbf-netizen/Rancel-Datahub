@@ -17,11 +17,14 @@ type Order = {
   agent: { user: { name: string } } | null;
 };
 
+const PER_PAGE = 10;
+
 export default function AdminAfaPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [price, setPrice] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [page, setPage] = useState(1);
 
   function load() {
     fetch("/api/admin/afa")
@@ -51,6 +54,9 @@ export default function AdminAfaPage() {
     setMsg("Price updated.");
     load();
   }
+
+  const totalPages = Math.max(1, Math.ceil(orders.length / PER_PAGE));
+  const slice = orders.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
@@ -82,7 +88,7 @@ export default function AdminAfaPage() {
             </tr>
           </thead>
           <tbody>
-            {orders.map((o) => (
+            {slice.map((o) => (
               <tr key={o.id} className="border-b border-ink/5">
                 <td className="py-2">{o.fullName}</td>
                 <td>{o.phoneNumber}</td>
@@ -96,6 +102,21 @@ export default function AdminAfaPage() {
           </tbody>
         </table>
         {orders.length === 0 && <p className="mt-3 text-sm text-slate">No AFA registrations yet.</p>}
+        <Pager page={page} totalPages={totalPages} onChange={setPage} count={orders.length} />
+      </div>
+    </div>
+  );
+}
+
+function Pager({ page, totalPages, onChange, count }: { page: number; totalPages: number; onChange: (p: number) => void; count: number }) {
+  if (count === 0) return null;
+  return (
+    <div className="mt-3 flex items-center justify-between text-sm">
+      <span className="text-slate">{count} registration{count === 1 ? "" : "s"}</span>
+      <div className="flex items-center gap-3">
+        <span className="text-slate">Page {page} of {totalPages}</span>
+        <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Prev</button>
+        <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Next</button>
       </div>
     </div>
   );

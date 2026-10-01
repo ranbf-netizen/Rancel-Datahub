@@ -18,6 +18,7 @@ function StatusPill({ text, tone }: { text: string; tone: "good" | "warn" | "bad
 
 export default function AdminSmsNumbers() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersPage, setOrdersPage] = useState(1);
   const [balance, setBalance] = useState<number | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +70,15 @@ export default function AdminSmsNumbers() {
   // Live preview of what a $2 number would cost a customer with these settings.
   const previewUsd = 2;
   const previewGhs = markupPct && usdToGhs ? (previewUsd * Number(usdToGhs) * (1 + Number(markupPct) / 100)).toFixed(2) : null;
+
+  // Client-side pagination over the already-loaded orders list.
+  const ORDERS_PER_PAGE = 10;
+  const totalOrderPages = Math.max(1, Math.ceil(orders.length / ORDERS_PER_PAGE));
+  const clampedOrdersPage = Math.min(ordersPage, totalOrderPages);
+  const pagedOrders = orders.slice(
+    (clampedOrdersPage - 1) * ORDERS_PER_PAGE,
+    clampedOrdersPage * ORDERS_PER_PAGE
+  );
 
   return (
     <div>
@@ -140,7 +150,7 @@ export default function AdminSmsNumbers() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((o) => (
+              {pagedOrders.map((o) => (
                 <tr key={o.id} className="border-b border-ink/5 hover:bg-mist/50">
                   <td className="whitespace-nowrap px-5 py-3 text-xs text-slate">{new Date(o.createdAt).toLocaleString()}</td>
                   <td className="whitespace-nowrap">
@@ -163,6 +173,33 @@ export default function AdminSmsNumbers() {
           </table>
         </div>
         {loading && <p className="px-5 py-4 text-sm text-slate"><Loader2 size={14} className="mr-1 inline animate-spin" /> Loading…</p>}
+
+        {orders.length > ORDERS_PER_PAGE && (
+          <div className="flex items-center justify-between border-t border-ink/10 px-5 py-3 text-sm">
+            <span className="text-slate">
+              {orders.length} order{orders.length === 1 ? "" : "s"}
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-slate">
+                Page {clampedOrdersPage} of {totalOrderPages}
+              </span>
+              <button
+                onClick={() => setOrdersPage((p) => Math.max(1, p - 1))}
+                disabled={clampedOrdersPage <= 1}
+                className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <button
+                onClick={() => setOrdersPage((p) => Math.min(totalOrderPages, p + 1))}
+                disabled={clampedOrdersPage >= totalOrderPages}
+                className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
