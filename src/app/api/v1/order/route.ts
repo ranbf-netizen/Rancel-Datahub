@@ -6,15 +6,14 @@ import { placeOrder } from "@/lib/supplier";
 
 export const dynamic = "force-dynamic";
 
-const RESELLER_MARKUP = 1.024; // reseller cost = costPrice + 2.4%
-
 function isValidGhanaNumber(v: string) {
   return /^0\d{9}$/.test((v || "").trim());
 }
 
 // POST /api/v1/order  { bundleId, recipient }
-// Places a data order billed to the agent's TOP-UP wallet.
-// Safety: deduct → place → refund on failure. Never charges without an order.
+// Places a data order billed to the agent's TOP-UP wallet at their own
+// reseller rate (admin-set discountPercent = markup above cost).
+// Safety: deduct -> place -> refund on failure.
 export async function POST(req: Request) {
   const agent = await authenticateApiKey(req);
   if (!agent) return NextResponse.json({ error: "Invalid or missing API key." }, { status: 401 });
@@ -34,9 +33,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Bundle not found or not available." }, { status: 404 });
   }
 
-  const cost = Math.round(bundle.costPrice * RESELLER_MARKUP * 100) / 100;
+  // Agent price = cost + the agent's own markup (admin-set discountPercent).
+  const cost = Math.round(bundle.costPrice * (1 + agent.discountPercent / 100) * 100) / 100;
 
-  // Re-fetch the agent's live wallet balance inside the transaction guard.
   const freshAgent = await prisma.agentProfile.findUnique({ where: { id: agent.id } });
   if (!freshAgent || freshAgent.walletBalance < cost) {
     return NextResponse.json({ error: "Insufficient wallet balance.", required: cost, balance: freshAgent?.walletBalance ?? 0 }, { status: 402 });
@@ -44,7 +43,6 @@ export async function POST(req: Request) {
 
   const reference = `RDH-API-${uuid()}`;
 
-  // Create the order record + deduct wallet atomically (PROCESSING, PAID).
   const order = await prisma.dataOrder.create({
     data: {
       userId: freshAgent.userId,
@@ -61,7 +59,6 @@ export async function POST(req: Request) {
     where: { id: agent.id },
     data: { walletBalance: { decrement: cost } },
   });
-  // Log the spend
   await prisma.agentTransaction.create({
     data: {
       agentId: agent.id,
@@ -73,7 +70,6 @@ export async function POST(req: Request) {
     },
   }).catch(() => {});
 
-  // Place with the supplier — refund the wallet if it fails.
   try {
     const result = await placeOrder({
       network: bundle.network as any,
@@ -93,7 +89,6 @@ export async function POST(req: Request) {
       charged: cost,
     });
   } catch (err: any) {
-    // Refund the wallet — order couldn't be placed.
     await prisma.agentProfile.update({ where: { id: agent.id }, data: { walletBalance: { increment: cost } } });
     await prisma.dataOrder.update({
       where: { id: order.id },
@@ -110,4 +105,26 @@ export async function POST(req: Request) {
     }).catch(() => {});
     return NextResponse.json({ error: "Order could not be placed. Your wallet was not charged.", detail: err.message }, { status: 502 });
   }
+}
+
+// Customer's own API orders.
+export async function GET(req: Request) {
+  const agent = await authenticateApiKey(req);
+  if (!agent) return NextResponse.json({ error: "Invalid or missing API key." }, { status: 401 });
+  const orders = await prisma.dataOrder.findMany({
+    where: { userId: agent.userId },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: { bundle: true },
+  });
+  return NextResponse.json({
+    orders: orders.map((o: any) => ({
+      orderId: o.id,
+      bundle: `${o.bundle.dataSizeGb}GB ${o.bundle.network}`,
+      recipient: o.beneficiaryNumber,
+      charged: o.amount,
+      status: o.fulfillmentStatus === "DELIVERED" ? "delivered" : o.fulfillmentStatus === "FAILED" ? "failed" : "processing",
+      createdAt: o.createdAt,
+    })),
+  });
 }

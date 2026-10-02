@@ -120,7 +120,7 @@ export default function AgentDashboard() {
         <button onClick={() => setPanel(panel === "api" ? null : "api")} className="btn-secondary shrink-0 whitespace-nowrap">API Access</button>
       </div>
 
-      {panel === "prices" && <PriceListPanel bundles={bundles} />}
+      {panel === "prices" && <PriceListPanel bundles={bundles} discountPercent={profile!.discountPercent} />}
               {panel === "topup" && <TopUpPanel />}
       {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
       {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
@@ -264,7 +264,7 @@ function StatCard({ label, value, highlight }: { label: string; value: string; h
   );
 }
 
-function PriceListPanel({ bundles }: { bundles: Bundle[] }) {
+function PriceListPanel({ bundles, discountPercent }: { bundles: Bundle[]; discountPercent: number }) {
   const NETWORK_LABELS: Record<string, string> = {
     MTN: "MTN", TELECEL: "Telecel",
     AIRTELTIGO_ISHARE: "AirtelTigo (iShare)", AIRTELTIGO_BIGTIME: "AirtelTigo (BigTime)",
@@ -294,7 +294,7 @@ function PriceListPanel({ bundles }: { bundles: Bundle[] }) {
                 <td className="font-medium">{b.dataSizeGb}GB</td>
                 <td className="text-slate">{(b as any).validityDays ?? "—"} days</td>
                 <td className="text-right font-semibold text-primary">
-                  GH₵ {(Math.round(b.costPrice * 1.024 * 100) / 100).toFixed(2)}
+                  GH₵ {(Math.round(b.costPrice * (1 + discountPercent / 100) * 100) / 100).toFixed(2)}
                 </td>
               </tr>
             ))}
