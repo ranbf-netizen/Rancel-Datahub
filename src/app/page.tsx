@@ -8,22 +8,66 @@ import NetworkIllustration from "./components/NetworkIllustration";
 import LiveDeliveryAnimation from "./components/LiveDeliveryAnimation";
 import TestimonialSlider from "./components/TestimonialSlider";
 import UpdatePopup from "./components/UpdatePopup";
+import HeroSlideshow from "./components/HeroSlideshow";
 
 export default function HomePage() {
   return (
     <div>
       <UpdatePopup />
-      {/* Hero - background image with dark overlay for readability */}
-      <section className="relative bg-ink">
-        {/* background image + overlay */}
+            {/* Hero */}
+      {/* --- MOBILE: 16:9 image with content on it, Quick Buy below --- */}
+      <section className="md:hidden">
+        <div className="relative aspect-video w-full overflow-hidden bg-ink">
+          <HeroSlideshow />
+          <div className="relative flex h-full flex-col justify-center px-5 py-6">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-medium text-white/70">
+              <span className="h-1.5 w-1.5 rounded-full bg-mtn" /> Ghana&rsquo;s all-in-one platform
+            </span>
+            <h1 className="mt-2 text-2xl font-bold leading-tight text-white">
+              Ghana&rsquo;s Digital Services Hub
+            </h1>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href="/data" className="btn-primary !px-3 !py-1.5 !text-xs">Buy Data</Link>
+              <Link href="/shop" className="btn-primary !px-3 !py-1.5 !text-xs">Shop</Link>
+              <Link href="/tools" className="btn-ghost-light !px-3 !py-1.5 !text-xs">AI Tools</Link>
+            </div>
+          </div>
+        </div>
+              {/* stats + Quick Buy below the image on mobile */}
+      <div className="relative overflow-hidden bg-ink px-5 pb-8">
+        {/* subtle grid pattern */}
         <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/hero-bg.jpg')" }}
+          className="pointer-events-none absolute inset-0 text-white opacity-[0.06]"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, currentColor 1px, transparent 1px),
+              linear-gradient(to bottom, currentColor 1px, transparent 1px)
+            `,
+            backgroundSize: "36px 36px",
+          }}
           aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-black/85" aria-hidden="true" />
+        {/* soft glow */}
+        <div className="pointer-events-none absolute -right-16 top-0 h-56 w-56 rounded-full bg-primary/20 blur-3xl" aria-hidden="true" />
 
-        <div className="relative mx-auto grid max-w-6xl gap-12 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
+        {/* content sits above the decoration */}
+        <div className="relative">
+          <div className="grid grid-cols-3 gap-4 border-b border-white/10 py-5 text-center">
+            <Stat value="Instant" label="Delivery" />
+            <Stat value="5+" label="Services" />
+            <Stat value="24/7" label="Open" />
+          </div>
+          <div className="pt-6">
+            <QuickBuyWidget />
+          </div>
+        </div>
+      </div>
+      </section>
+
+      {/* --- DESKTOP: original side-by-side layout, unchanged --- */}
+      <section className="relative hidden bg-ink md:block">
+        <HeroSlideshow />
+        <div className="relative mx-auto grid max-w-6xl gap-12 px-5 py-24 md:grid-cols-2 md:items-center">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/70">
               <span className="h-1.5 w-1.5 rounded-full bg-mtn" /> Ghana&rsquo;s all-in-one digital platform
@@ -35,19 +79,17 @@ export default function HomePage() {
               Buy data bundles, access digital subscriptions, discover AI-powered tools, download
               digital products, and grow your business — all from one platform.
             </p>
-            <div className="mt-8 flex gap-2">
-  <Link href="/data" className="btn-primary !px-3 !py-2 !text-xs">Buy Data Now</Link>
-  <Link href="/shop" className="btn-primary !px-3 !py-2 !text-xs">Shop Now</Link>
-  <Link href="/tools" className="btn-ghost-light !px-3 !py-2 !text-xs">Try AI Tools</Link>
-</div>
-
+            <div className="mt-8 flex gap-3">
+              <Link href="/data" className="btn-primary">Buy Data Now</Link>
+              <Link href="/shop" className="btn-primary">Shop Now</Link>
+              <Link href="/tools" className="btn-ghost-light">Try AI Tools</Link>
+            </div>
             <div className="mt-12 grid grid-cols-3 gap-6 border-t border-white/10 pt-6">
               <Stat value="Instant" label="Delivery" />
               <Stat value="5+" label="Services in one place" />
               <Stat value="24/7" label="Always open" />
             </div>
           </div>
-
           <QuickBuyWidget />
         </div>
       </section>

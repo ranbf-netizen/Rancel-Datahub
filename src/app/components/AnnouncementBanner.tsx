@@ -21,12 +21,30 @@ export default function AnnouncementBanner() {
 
   return (
     <div className="border-b border-primary/20 bg-[#EAF1FE]">
-      <div className="mx-auto max-w-6xl px-5 py-2.5 text-sm">
-        <Link href="/updates" className="block truncate">
-          <span className="font-semibold text-primary">{latest.title}</span>
-          <span className="ml-2 text-ink/60">{latest.body}</span>
-        </Link>
-      </div>
+      <style>{`
+        @keyframes rdh-ann-marquee {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
+        .rdh-ann-track { animation: rdh-ann-marquee 25s linear infinite; }
+        .rdh-ann-track:hover { animation-play-state: paused; }
+      `}</style>
+
+      <Link href="/updates" className="flex items-center gap-3 py-2.5 text-sm">
+        {/* Fixed title */}
+        <span className="shrink-0 whitespace-nowrap px-4 font-semibold text-primary">
+          {latest.title}
+        </span>
+
+        {/* Scrolling body */}
+        <div className="flex-1 overflow-hidden">
+          <div className="rdh-ann-track flex w-max whitespace-nowrap text-ink/60">
+            {[0, 1].map((dup) => (
+              <span key={dup} className="px-8">{latest.body}</span>
+            ))}
+          </div>
+        </div>
+      </Link>
     </div>
   );
 }
