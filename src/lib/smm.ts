@@ -6,9 +6,12 @@
  * check balance before placing an order so we never take a customer's Paystack
  * payment and then fail to fulfil (see placeBoostOrder's balance guard).
  *
- * Prices from the panel are in USD. Your shop sells in GHS; you set the GHS
- * selling price on each boosting product yourself, so no currency conversion is
- * needed here — we only use the API to place/track the actual boost.
+ * IMPORTANT - CURRENCY: this panel is GHS-native, not USD. You fund your
+ * balance in cedis and the dashboard shows cedis, so `rate` in each service
+ * from getSmmServices() is already a GH₵ price per 1000 - do NOT multiply it
+ * by a USD->GHS rate anywhere (that was a real bug here before: multiplying
+ * an already-GHS rate by usdToGhs again inflated prices ~12x). Only
+ * markupPct should be applied on top of it.
  */
 
 const BASE_URL = process.env.SMM_API_URL || "https://gainrealgrowth.com/api/v2";
@@ -28,11 +31,12 @@ async function smmCall(params: Record<string, string | number>) {
   return data;
 }
 
-/** Panel balance in USD. */
+/** Panel balance - GHS for this panel (see currency note above), whatever
+ * the panel's own `currency` field reports takes precedence if present. */
 export async function getSmmBalance(): Promise<{ balance: number; currency: string }> {
   const data = await smmCall({ action: "balance" });
   if (data.error) throw new Error(`SMM balance error: ${data.error}`);
-  return { balance: Number(data.balance), currency: data.currency || "USD" };
+  return { balance: Number(data.balance), currency: data.currency || "GHS" };
 }
 
 /** List available services from the panel. */

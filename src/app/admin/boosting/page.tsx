@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertTriangle, RefreshCw, Wallet } from "lucide-react";
+import { Loader2, AlertTriangle, RefreshCw, Wallet, TrendingUp, Save, Check } from "lucide-react";
 
 type Order = {
   id: string; customer: string; email: string; phone: string;
@@ -30,13 +30,43 @@ export default function AdminBoosting() {
   const [syncing, setSyncing] = useState(false);
   const [page, setPage] = useState(1);
 
+  const [markupPct, setMarkupPct] = useState("");
+  const [exampleCost, setExampleCost] = useState("12.69");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
   function load() {
     setLoading(true);
     fetch("/api/admin/boosting").then((r) => r.json()).then((d) => {
-            if (!d.error) { setOrders((d.orders || []).filter((o: any) => o.paymentStatus === "PAID")); setBalance(d.balance); setBalanceError(d.balanceError); }
+            if (!d.error) {
+        setOrders((d.orders || []).filter((o: any) => o.paymentStatus === "PAID"));
+        setBalance(d.balance);
+        setBalanceError(d.balanceError);
+        if (typeof d.markupPct === "number") setMarkupPct(String(d.markupPct));
+      }
     }).finally(() => setLoading(false));
   }
   useEffect(load, []);
+
+  async function saveMarkup() {
+    setSaving(true);
+    setSaved(false);
+    await fetch("/api/admin/boosting", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markupPct }),
+    });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  // GainRealGrowth prices in GH₵ already, so this preview takes a real panel
+  // cost you type in (e.g. straight off their checkout page) and shows what
+  // the customer pays with the current markup - no exchange rate involved.
+  const previewPrice = markupPct && exampleCost
+    ? (Number(exampleCost) * (1 + Number(markupPct) / 100)).toFixed(2)
+    : null;
 
   async function syncStatuses() {
     setSyncing(true);
@@ -69,26 +99,61 @@ export default function AdminBoosting() {
         </div>
       </div>
 
-      {/* Panel balance */}
-      <div className="card mt-6 max-w-sm">
-        <p className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink/60">
-          <Wallet size={16} /> Panel balance
-        </p>
-        {balanceError ? (
-          <p className="mt-2 text-sm text-ghRed">Couldn&rsquo;t fetch balance — {balanceError}</p>
-        ) : balance === null ? (
-          <p className="mt-2 text-sm text-ink/50">Checking…</p>
-        ) : (
-          <>
-            <p className="mt-2 text-3xl font-bold">{balance.toFixed(2)}</p>
-            {balance <= LOW_BALANCE && (
-              <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
-                <AlertTriangle size={14} /> Low balance — top up the panel or boost orders will fail.
-              </p>
-            )}
-          </>
-        )}
-        {/*<p className="mt-3 text-xs text-ink/50">Customer payments come to your Paystack; boosts are paid from this panel balance.</p>*/}
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        {/* Panel balance - GainRealGrowth is GH₵-native, so this balance is
+            already cedis, not dollars. */}
+        <div className="card">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink/60">
+            <Wallet size={16} /> Panel balance
+          </p>
+          {balanceError ? (
+            <p className="mt-2 text-sm text-ghRed">Couldn&rsquo;t fetch balance — {balanceError}</p>
+          ) : balance === null ? (
+            <p className="mt-2 text-sm text-ink/50">Checking…</p>
+          ) : (
+            <>
+              <p className="mt-2 text-3xl font-bold">GH₵ {balance.toFixed(2)}</p>
+              {balance <= LOW_BALANCE && (
+                <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
+                  <AlertTriangle size={14} /> Low balance — top up the panel or boost orders will fail.
+                </p>
+              )}
+            </>
+          )}
+          <p className="mt-3 text-xs text-ink/50">Customer payments come to your Paystack; boosts are paid from this panel balance.</p>
+        </div>
+
+        {/* Pricing - markup only. The panel's rate is already in GH₵, so
+            there's no exchange-rate field here on purpose. */}
+        <div className="card">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-ink/60">
+            <TrendingUp size={16} /> Pricing
+          </p>
+          <div className="mt-3">
+            <label className="label">Markup %</label>
+            <input className="field" type="number" value={markupPct} onChange={(e) => setMarkupPct(e.target.value)} />
+          </div>
+
+          <div className="mt-3 rounded-lg bg-mist p-3">
+            <label className="text-xs font-medium text-slate">Check against a real panel price</label>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-sm text-slate">GH₵</span>
+              <input
+                className="field !py-1.5"
+                type="number"
+                value={exampleCost}
+                onChange={(e) => setExampleCost(e.target.value)}
+                placeholder="e.g. what GainRealGrowth shows"
+              />
+            </div>
+            {previewPrice && <p className="mt-2 text-sm">Customer pays <span className="font-bold text-primary">GH₵ {previewPrice}</span></p>}
+          </div>
+
+          <button onClick={saveMarkup} disabled={saving} className="btn-primary mt-3 inline-flex items-center gap-2 !py-2 !text-sm disabled:opacity-50">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
+            {saving ? "Saving…" : saved ? "Saved" : "Save markup"}
+          </button>
+        </div>
       </div>
 
       {/* Orders table — same card style as the data bundle orders page */}

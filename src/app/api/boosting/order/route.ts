@@ -32,8 +32,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Quantity must be between ${min} and ${max}.` }, { status: 400 });
   }
 
-  const usdPer1000 = Number(svc.rate) || 0;
-  const amount = Math.round(usdPer1000 * settings.usdToGhs * (1 + settings.markupPct / 100) * (qty / 1000) * 100) / 100;
+  // GainRealGrowth is GHS-native - svc.rate is already a GH₵ price per 1000,
+  // NOT USD. Do not multiply by usdToGhs here (that was the bug: it was
+  // double-converting an already-GHS number and inflating prices ~12x).
+  // Only the markup gets applied on top of the panel's real GHS cost.
+  const ghsPer1000 = Number(svc.rate) || 0;
+  const amount = Math.round(ghsPer1000 * (1 + settings.markupPct / 100) * (qty / 1000) * 100) / 100;
   if (amount <= 0) return NextResponse.json({ error: "Invalid price." }, { status: 400 });
 
   const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true } });
