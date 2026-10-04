@@ -232,7 +232,7 @@ export default function ShopPage() {
           </div>
         </Link>
 
-        <Link
+        {/*<Link
           href="/shop/sms-numbers"
           className="card hover-lift flex flex-col overflow-hidden !p-0"
         >
@@ -253,7 +253,7 @@ export default function ShopPage() {
               Tap to browse →
             </p>
           </div>
-        </Link>
+        </Link>*/}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
