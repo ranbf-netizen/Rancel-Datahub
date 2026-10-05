@@ -46,14 +46,24 @@ export async function getSmsPoolServices() {
   return data as { ID: string; name: string }[];
 }
 
-/** Live USD price for one country + service combo. */
+/** Live USD price for one country + service combo.
+ *
+ * REAL response shape (confirmed against the live API on 2026-09 - public
+ * docs/examples for this endpoint are inconsistent/wrong, this is ground
+ * truth from an actual call): an ARRAY of pool options, price as a STRING,
+ * e.g. [{ "service":1, "country":1, "pool":7, "price":"0.14" }, ...].
+ * This picks the cheapest pool, since that's the best price available -
+ * the actual order endpoint doesn't need a pool specified, it auto-selects. */
 export async function getSmsPoolPrice(countryId: string, serviceId: string): Promise<number> {
   const data = await smsPoolCall("/request/pricing", { country: countryId, service: serviceId });
-  // Pricing endpoint can return either a flat number or a small object depending on the service;
-  // handle both defensively rather than assuming one shape.
-  const price = typeof data === "number" ? data : Number(data.price ?? data[serviceId] ?? data.cost);
-  if (Number.isNaN(price) || price <= 0) throw new Error("SMSPool pricing: could not price this country/service combo.");
-  return price;
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("SMSPool pricing: could not price this country/service combo.");
+  }
+  const prices = data.map((entry: any) => Number(entry.price)).filter((p: number) => !Number.isNaN(p) && p > 0);
+  if (prices.length === 0) {
+    throw new Error("SMSPool pricing: could not price this country/service combo.");
+  }
+  return Math.min(...prices);
 }
 
 /** Rents a number for one country + service. Returns the number and how long it's valid for. */
