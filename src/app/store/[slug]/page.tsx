@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Zap, ShieldCheck, MessageCircle, BadgeCheck, Info } from "lucide-react";
 
 type Bundle = {
   id: string;
@@ -40,6 +40,7 @@ const NETWORK_BUY_BUTTON: Record<string, string> = {
 };
 
 type SortKey = "price-asc" | "price-desc" | "size-asc" | "size-desc";
+type Announcement = { id: string; title: string; body: string };
 
 function isValidGhanaNumber(value: string) {
   return /^0\d{9}$/.test(value.trim());
@@ -47,9 +48,11 @@ function isValidGhanaNumber(value: string) {
 
 export default function StorePage({ params }: { params: { slug: string } }) {
   const [storeName, setStoreName] = useState<string>("");
+    const [storePhone, setStorePhone] = useState<string>("");
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   const [network, setNetwork] = useState("MTN");
   const [search, setSearch] = useState("");
@@ -64,12 +67,19 @@ export default function StorePage({ params }: { params: { slug: string } }) {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => {
         setStoreName(d.storeName);
+                setStorePhone(d.storePhone || "");
         setBundles(Array.isArray(d.bundles) ? d.bundles : []);
         const present = Array.from(new Set(d.bundles.map((b: Bundle) => b.network)));
         if (present.length && !present.includes("MTN")) setNetwork(present[0] as string);
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
+
+    // platform announcement (best-effort)
+    fetch("/api/announcements")
+      .then((r) => r.json())
+      .then((d: Announcement[]) => { if (Array.isArray(d) && d.length > 0) setAnnouncement(d[0]); })
+      .catch(() => {});
   }, [params.slug]);
 
   const networksPresent = Array.from(new Set(bundles.map((b) => b.network)));
@@ -124,41 +134,100 @@ export default function StorePage({ params }: { params: { slug: string } }) {
     );
   }
 
+    const whatsapp = storePhone
+    ? storePhone.replace(/\D/g, "").replace(/^0/, "233")
+    : "";
+
   return (
-    <div className="mx-auto max-w-5xl px-5 py-12">
-      <p className="text-xs font-semibold uppercase tracking-widest text-primary">Data Store</p>
-      <h1 className="mt-1 text-3xl font-bold sm:text-4xl">{storeName || "Loading store…"}</h1>
-      <p className="mt-2 max-w-xl text-slate">
-        Pick a network, pick a bundle, and pay securely — delivered straight to the number you enter.
-        No account needed.
-      </p>
+    <div className="min-h-screen bg-paper">
+      {/* Announcement bar — title fixed, body scrolls */}
+      {announcement && (
+        <div className="border-b border-primary/20 bg-[#EAF1FE]">
+          <style>{`
+            @keyframes rdh-store-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+            .rdh-store-track { animation: rdh-store-marquee 25s linear infinite; }
+            .rdh-store-track:hover { animation-play-state: paused; }
+          `}</style>
+          <div className="flex items-center gap-3 py-2.5 text-sm">
+            <span className="shrink-0 whitespace-nowrap px-4 font-semibold text-primary">{announcement.title}</span>
+            <div className="flex-1 overflow-hidden">
+              <div className="rdh-store-track flex w-max whitespace-nowrap text-ink/60">
+                {[0, 1].map((dup) => <span key={dup} className="px-8">{announcement.body}</span>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* Store header */}
+      <header className="border-b border-ink/10 bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <img src="/logo.svg" alt="Store" className="h-9 w-9" />
+            <div>
+              <p className="font-display text-lg font-bold leading-none text-ink">{storeName || "Data Store"}</p>
+              <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-slate">
+                <BadgeCheck size={12} className="text-primary" /> Powered by RanCel DataHub
+              </p>
+            </div>
+          </div>
+          <a
+            href={`https://wa.me/${whatsapp}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-2 text-sm font-medium hover:bg-mist"
+          >
+            <MessageCircle size={15} className="text-[#25D366]" /> Support
+          </a>
+        </div>
+      </header>
 
-      {/* Network tabs */}
-      <div className="mt-8 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {Object.entries(NETWORK_LABELS)
-          .filter(([key]) => networksPresent.length === 0 || networksPresent.includes(key))
-          .map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => { setNetwork(key); setSelected(null); }}
-              className={`chip flex shrink-0 items-center gap-2 ${network === key ? NETWORK_ACTIVE_CHIP[key] : ""}`}
-            >
-              <span className={`h-2 w-2 rounded-full ${network === key ? "bg-current" : NETWORK_DOT[key]}`} />
-              {label}
-            </button>
-          ))}
+            {/* Trust badges */}
+      <div className="border-b border-ink/10 bg-mist">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-6 gap-y-2 px-5 py-3 text-xs font-medium text-ink/70">
+          <span className="inline-flex items-center gap-1.5"><Zap size={14} className="text-primary" /> Instant delivery</span>
+          <span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} className="text-primary" /> Secure payment</span>
+          <span className="inline-flex items-center gap-1.5"><MessageCircle size={14} className="text-primary" /> WhatsApp support</span>
+        </div>
       </div>
 
-      {/* Search + sort */}
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      <div className="mx-auto max-w-5xl px-5 py-10">
+        <p className="text-xs font-semibold uppercase tracking-widest text-primary">Buy Data</p>
+        <h1 className="mt-1 text-3xl font-bold sm:text-4xl">Fast, affordable data</h1>
+
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <Info size={18} className="mt-0.5 shrink-0 text-primary" />
+          <p className="text-sm text-ink/80">
+            Pick a network, pick a bundle, and pay securely — delivered straight to the number you enter.
+            <span className="font-medium"> No account needed.</span>
+          </p>
+        </div>
+
+        {/* Network tabs */}
+        <div className="mt-8 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {Object.entries(NETWORK_LABELS)
+            .filter(([key]) => networksPresent.length === 0 || networksPresent.includes(key))
+            .map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => { setNetwork(key); setSelected(null); }}
+                className={`chip flex shrink-0 items-center gap-2 ${network === key ? NETWORK_ACTIVE_CHIP[key] : ""}`}
+              >
+                <span className={`h-2 w-2 rounded-full ${network === key ? "bg-current" : NETWORK_DOT[key]}`} />
+                {label}
+              </button>
+            ))}
+        </div>
+
+        {/* Search + sort */}
+              <div className="mt-5 flex items-center gap-3">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by size, e.g. 5"
-          className="field max-w-[220px]"
+          className="field flex-1"
         />
-        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="field max-w-[200px]">
+        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="field w-auto shrink-0">
           <option value="size-asc">Sort: Size (low to high)</option>
           <option value="size-desc">Sort: Size (high to low)</option>
           <option value="price-asc">Sort: Price (low to high)</option>
@@ -166,33 +235,71 @@ export default function StorePage({ params }: { params: { slug: string } }) {
         </select>
       </div>
 
-      {/* Bundle cards */}
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
-        {loading && <p className="text-sm text-slate">Loading bundles…</p>}
-        {!loading && filtered.length === 0 && (
-          <p className="col-span-full rounded-xl border border-dashed border-ink/15 p-6 text-sm text-slate">
-            No bundles available for this network right now — check back soon.
-          </p>
-        )}
-        {filtered.map((b) => (
-          <button
-            key={b.id}
-            onClick={() => setSelected(b)}
-            className={`card relative text-left transition hover:-translate-y-0.5 hover:shadow-md ${
-              selected?.id === b.id ? "ring-2 ring-primary" : ""
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <p className="text-2xl font-bold">{b.dataSizeGb}GB</p>
-              {b.id === bestValueId && <span className="badge-value">Best Value</span>}
-              {b.id === popularId && b.id !== bestValueId && <span className="badge-popular">Popular</span>}
-            </div>
-            <p className="mt-1 text-lg font-semibold text-primary">GH₵ {b.price.toFixed(2)}</p>
-            <p className="mt-1 text-xs text-slate">{b.validityDays} Days validity</p>
-            <span className={`btn-primary mt-4 w-full !py-2 !text-xs ${NETWORK_BUY_BUTTON[b.network] || ""}`}>Buy Now</span>
-          </button>
-        ))}
+        {/* Bundle cards */}
+        <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
+          {loading && <p className="text-sm text-slate">Loading bundles…</p>}
+          {!loading && filtered.length === 0 && (
+            <p className="col-span-full rounded-xl border border-dashed border-ink/15 p-6 text-sm text-slate">
+              No bundles available for this network right now — check back soon.
+            </p>
+          )}
+                    {filtered.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setSelected(b)}
+              className={`group relative overflow-hidden rounded-2xl border border-ink/10 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md ${
+                selected?.id === b.id ? "ring-2 ring-primary" : ""
+              }`}
+            >
+              {/* faint dot pattern INSIDE the card */}
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage: "radial-gradient(rgba(37,99,235,0.12) 1.5px, transparent 1.5px)",
+                  backgroundSize: "16px 16px",
+                }}
+                aria-hidden="true"
+              />
+
+              {/* network-colored accent bar */}
+              <span className={`absolute inset-x-0 top-0 h-1 ${NETWORK_DOT[b.network] || "bg-primary"}`} aria-hidden="true" />
+
+              {/* content above the dots */}
+              <div className="relative flex items-start justify-between">
+                <div>
+                  <p className="text-3xl font-bold leading-none text-ink">
+                    {b.dataSizeGb}<span className="ml-0.5 text-lg font-semibold text-slate">GB</span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate">{NETWORK_LABELS[b.network]}</p>
+                </div>
+                {b.id === bestValueId && <span className="badge-value">Best Value</span>}
+                {b.id === popularId && b.id !== bestValueId && <span className="badge-popular">Popular</span>}
+              </div>
+
+              <p className="relative mt-3 text-xl font-bold text-primary">GH₵ {b.price.toFixed(2)}</p>
+              <p className="relative mt-0.5 text-xs text-slate">{b.validityDays} days validity</p>
+
+              <span className={`btn-primary relative mt-4 block w-full text-center !py-2 !text-xs ${NETWORK_BUY_BUTTON[b.network] || ""}`}>
+                Buy Now
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Footer */}
+      <footer className="mt-10 border-t border-ink/10 bg-white">
+        <div className="mx-auto max-w-5xl px-5 py-8 text-center text-xs text-slate">
+          <p className="font-semibold text-ink">{storeName || "Data Store"}</p>
+          <p className="mt-1">Instant data delivery for MTN, Telecel &amp; AirtelTigo.</p>
+          <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-primary hover:underline">
+            <MessageCircle size={13} /> Need help? Chat on WhatsApp
+          </a>
+          <p className="mt-3 inline-flex items-center gap-1 text-[11px] text-slate/70">
+            <BadgeCheck size={11} className="text-primary" /> Powered by RanCel DataHub
+          </p>
+        </div>
+      </footer>
 
       {/* Checkout modal */}
       {selected && (
@@ -226,7 +333,27 @@ export default function StorePage({ params }: { params: { slug: string } }) {
             </button>
           </form>
         </div>
+            )}
+
+      {/* Floating WhatsApp button with blinking green light */}
+      {whatsapp && (
+        <a
+          href={`https://wa.me/${whatsapp}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] shadow-lg transition hover:scale-105"
+          aria-label="Chat on WhatsApp"
+        >
+          <MessageCircle size={26} className="text-white" />
+          <span className="absolute right-0 top-0 flex h-3.5 w-3.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-green-500 ring-2 ring-white" />
+          </span>
+        </a>
       )}
     </div>
   );
 }
+
+
+  

@@ -16,6 +16,17 @@ function requireSecretKey() {
   return key;
 }
 
+// Paystack's own error responses include a clean, human-readable `message`
+// field (e.g. "Invalid Email Address Passed") - use that instead of dumping
+// the whole raw JSON response as the error, which is what was showing up
+// verbatim on the checkout screen before this fix.
+function paystackErrorMessage(data: any, fallback: string): string {
+  if (data && typeof data.message === "string" && data.message.trim()) {
+    return data.message;
+  }
+  return fallback;
+}
+
 export async function initializeTransaction(params: {
   email: string;
   amountGhs: number; // amount in GHS (converted to pesewas below)
@@ -42,7 +53,7 @@ export async function initializeTransaction(params: {
 
   const data = await res.json();
   if (!res.ok || !data.status) {
-    throw new Error(`Paystack initialize failed: ${JSON.stringify(data)}`);
+    throw new Error(paystackErrorMessage(data, "Could not start payment. Please try again."));
   }
 
   return data.data as { authorization_url: string; access_code: string; reference: string };
@@ -58,7 +69,7 @@ export async function verifyTransaction(reference: string) {
 
   const data = await res.json();
   if (!res.ok || !data.status) {
-    throw new Error(`Paystack verify failed: ${JSON.stringify(data)}`);
+    throw new Error(paystackErrorMessage(data, "Could not verify this payment. Please try again."));
   }
 
   return data.data as { status: string; amount: number; reference: string; customer: { email: string } };

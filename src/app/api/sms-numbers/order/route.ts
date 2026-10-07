@@ -7,6 +7,15 @@ import { getSmsPoolPrice } from "@/lib/smspool";
 
 export const dynamic = "force-dynamic";
 
+// A stored email being non-empty doesn't mean it's valid (stray whitespace,
+// missing @, old bad data, etc.) - Paystack rejects the whole request if
+// it's malformed, so never trust it blindly. Falls back to a safe generated
+// address if the real one doesn't look right.
+function isValidEmail(email?: string | null): email is string {
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 export async function POST(req: NextRequest) {
   const session = getSession();
   if (!session) return NextResponse.json({ error: "AUTH" }, { status: 401 });
@@ -46,9 +55,11 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  const safeEmail = isValidEmail(user?.email) ? user.email.trim() : `${session.userId}@user.rancel-datahub.com`;
+
   try {
     const tx = await initializeTransaction({
-      email: user?.email || `${session.userId}@user.rancel-datahub.com`,
+      email: safeEmail,
       amountGhs: amount,
       reference,
       callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/shop/sms-numbers?ref=${reference}`,
@@ -60,12 +71,14 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Customer's own SMS number orders.
+// Customer's own SMS number orders - only ones actually paid for. A pending/
+// abandoned checkout never became a real order, so it shouldn't show up in
+// "My SMS number orders" at all.
 export async function GET() {
   const session = getSession();
   if (!session) return NextResponse.json({ error: "AUTH" }, { status: 401 });
   const orders = await prisma.smsOrder.findMany({
-    where: { userId: session.userId },
+    where: { userId: session.userId, paymentStatus: "PAID" },
     orderBy: { createdAt: "desc" },
     take: 50,
     select: { id: true, countryName: true, serviceName: true, amount: true, paymentStatus: true, status: true, phoneNumber: true, smsCode: true, createdAt: true, paystackReference: true },

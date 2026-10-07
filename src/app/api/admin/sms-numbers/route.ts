@@ -10,10 +10,13 @@ function admin() {
   return s && s.role === "ADMIN" ? s : null;
 }
 
+// Only PAID orders - a pending/abandoned checkout never became a real order,
+// so it has no business showing up in the admin orders table either.
 export async function GET() {
   if (!admin()) return NextResponse.json({ error: "Admin only." }, { status: 403 });
 
   const orders = await prisma.smsOrder.findMany({
+    where: { paymentStatus: "PAID" },
     orderBy: { createdAt: "desc" },
     take: 200,
     include: { user: { select: { name: true, email: true, phone: true } } },

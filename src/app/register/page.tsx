@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AuthBackground from "../components/AuthBackground";
 import { Loader2, Eye, EyeOff, UserPlus } from "lucide-react";
+import { checkEmail } from "@/lib/validateEmail";
 
 const CREAM = "#FAF3E0";
 
@@ -14,14 +15,34 @@ export default function RegisterPage() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
 
   function update(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
+    if (field === "email") {
+      const result = value.trim() ? checkEmail(value) : null;
+      setEmailSuggestion(result && result.valid && result.suggestion ? result.suggestion : null);
+    }
+  }
+
+  function useSuggestion() {
+    if (!emailSuggestion) return;
+    setForm((f) => ({ ...f, email: emailSuggestion }));
+    setEmailSuggestion(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    // Hard block on genuinely malformed emails before even hitting the API -
+    // the server re-checks this too (never trust client-side validation alone).
+    const emailResult = checkEmail(form.email);
+    if (!emailResult.valid) {
+      setError("That email address doesn't look valid - please double check it.");
+      return;
+    }
+
     setLoading(true);
     const res = await fetch("/api/auth/register", {
       method: "POST",
@@ -57,6 +78,15 @@ export default function RegisterPage() {
           <div>
             <label className={labelClass}>Email</label>
             <input className={inputClass} style={{ backgroundColor: CREAM }} type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required />
+            {emailSuggestion && (
+              <p className="mt-1.5 text-xs text-amber-700">
+                Did you mean{" "}
+                <button type="button" onClick={useSuggestion} className="font-semibold underline underline-offset-2">
+                  {emailSuggestion}
+                </button>
+                ?
+              </p>
+            )}
           </div>
           <div>
             <label className={labelClass}>Phone number</label>

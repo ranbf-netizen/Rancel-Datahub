@@ -31,14 +31,17 @@ export function StorefrontBar() {
   const { inStore, slug } = useStoreContext();
   if (!inStore) return null;
   const q = slug ? `?store=${encodeURIComponent(slug)}` : "";
+  const storeHome = slug ? `/store/${slug}` : "/";
 
   return (
     <header className="border-b border-ink/10 bg-paper/95 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-        <span className="font-display text-xl font-bold text-ink">
+        {/* Clicking the name returns to the store's bundles */}
+        <Link href={storeHome} className="font-display text-xl font-bold text-ink">
           RanCel <span className="text-primary">DataHub</span>
-        </span>
+        </Link>
         <nav className="flex items-center gap-4 text-sm font-medium sm:gap-6">
+          <Link href={storeHome} className="hover:text-primary">Buy Data</Link>
           <Link href={`/track${q}`} className="hover:text-primary">Track Order</Link>
           <Link href={`/afa${q}`} className="hover:text-primary">AFA Registration</Link>
           <Link href={`/results${q}`} className="hover:text-primary">Results Checker</Link>

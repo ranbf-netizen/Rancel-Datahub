@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { X, ShoppingCart, Loader2 } from "lucide-react";
+import { X, ShoppingCart, Loader2, Info } from "lucide-react";
 import UnsupportedSimNotice from "../components/UnsupportedSimNotice";
 
 type Bundle = {
@@ -148,10 +148,13 @@ export default function DataPage() {
     <div className="mx-auto max-w-5xl px-5 py-12">
       <p className="text-xs font-semibold uppercase tracking-widest text-primary">Buy Data</p>
       <h1 className="mt-1 text-3xl font-bold sm:text-4xl">Pick a network, pick a bundle, done.</h1>
-      <p className="mt-2 max-w-xl text-slate">
-        Real prices, no hidden fees, delivered straight to the number you enter — pay per order,
-        no wallet needed.
-      </p>
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+        <Info size={18} className="mt-0.5 shrink-0 text-primary" />
+        <p className="text-sm text-ink/80">
+          Real prices, no hidden fees, delivered straight to the number you enter —
+          <span className="font-medium"> pay per order, no wallet needed.</span>
+        </p>
+      </div>
 
 
       {/* Network tabs */}
@@ -171,14 +174,14 @@ export default function DataPage() {
       </div>
 
       {/* Search + sort */}
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+            <div className="mt-5 flex items-center gap-3">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by size, e.g. 5"
-          className="field max-w-[220px]"
+          className="field flex-1"
         />
-        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="field max-w-[200px]">
+        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="field w-auto shrink-0">
           <option value="size-asc">Sort: Size (low to high)</option>
           <option value="size-desc">Sort: Size (high to low)</option>
           <option value="price-asc">Sort: Price (low to high)</option>
@@ -186,34 +189,58 @@ export default function DataPage() {
         </select>
       </div>
 
-      {/* Bundle cards */}
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
-        {loading && <p className="text-sm text-slate">Loading bundles…</p>}
-        {!loading && filtered.length === 0 && (
-          <p className="col-span-full rounded-xl border border-dashed border-ink/15 p-6 text-sm text-slate">
-            No bundles available for this network right now — check back soon.
-          </p>
-        )}
-        {filtered.map((b) => (
-          <button
-            key={b.id}
-            onClick={() => setSelected(b)}
-            className={`card relative text-left transition hover:-translate-y-0.5 hover:shadow-md ${
-              selected?.id === b.id ? "ring-2 ring-primary" : ""
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <p className="text-2xl font-bold">{b.dataSizeGb}GB</p>
-              {b.id === bestValueId && <span className="badge-value">Best Value</span>}
-              {b.id === popularId && b.id !== bestValueId && <span className="badge-popular">Popular</span>}
-            </div>
-            <p className="mt-1 text-lg font-semibold text-primary">GH₵ {b.sellingPrice.toFixed(2)}</p>
-            <p className="mt-1 text-xs text-slate">{b.validityDays} Days validity</p>
-            <span className={`btn-primary mt-4 w-full !py-2 !text-xs ${NETWORK_BUY_BUTTON[b.network] || ""}`}>Buy Now</span>
-          </button>
-        ))}
-      </div>
+                        {/* Bundle cards */}
+      <div className="relative mt-6">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          {loading && <p className="text-sm text-slate">Loading bundles…</p>}
+          {!loading && filtered.length === 0 && (
+            <p className="col-span-full rounded-xl border border-dashed border-ink/15 p-6 text-sm text-slate">
+              No bundles available for this network right now — check back soon.
+            </p>
+          )}
+          {filtered.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setSelected(b)}
+              className={`group relative overflow-hidden rounded-2xl border border-ink/10 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md ${
+                selected?.id === b.id ? "ring-2 ring-primary" : ""
+              }`}
+            >
+              {/* faint dot pattern INSIDE the card */}
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage: "radial-gradient(rgba(37,99,235,0.12) 1.5px, transparent 1.5px)",
+                  backgroundSize: "16px 16px",
+                }}
+                aria-hidden="true"
+              />
 
+              {/* network-colored accent bar */}
+              <span className={`absolute inset-x-0 top-0 h-1 ${NETWORK_DOT[b.network] || "bg-primary"}`} aria-hidden="true" />
+
+              {/* content above the dots */}
+              <div className="relative flex items-start justify-between">
+                <div>
+                  <p className="text-3xl font-bold leading-none text-ink">
+                    {b.dataSizeGb}<span className="ml-0.5 text-lg font-semibold text-slate">GB</span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate">{NETWORK_LABELS[b.network]}</p>
+                </div>
+                {b.id === bestValueId && <span className="badge-value">Best Value</span>}
+                {b.id === popularId && b.id !== bestValueId && <span className="badge-popular">Popular</span>}
+              </div>
+
+              <p className="relative mt-3 text-xl font-bold text-primary">GH₵ {b.sellingPrice.toFixed(2)}</p>
+              <p className="relative mt-0.5 text-xs text-slate">{b.validityDays} days validity</p>
+
+              <span className={`btn-primary relative mt-4 block w-full text-center !py-2 !text-xs ${NETWORK_BUY_BUTTON[b.network] || ""}`}>
+                Buy Now
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Checkout modal */}
       {selected && (
         <div

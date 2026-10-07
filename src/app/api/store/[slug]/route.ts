@@ -21,7 +21,7 @@ function markedUp(sellingPrice: number, _markupPct: number) {
 export async function GET(_req: NextRequest, { params }: { params: { slug: string } }) {
   const profile = await prisma.agentProfile.findUnique({
     where: { storeSlug: params.slug },
-    include: { user: { select: { name: true } } },
+    include: { user: { select: { name: true, phone: true } } },
   });
   if (!profile || profile.status !== "APPROVED") {
     return NextResponse.json({ error: "Store not found." }, { status: 404 });
@@ -35,6 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
 
   return NextResponse.json({
     storeName: profile.user.name,
+    storePhone: profile.user.phone, // the agent's own number, for WhatsApp support
     slug: profile.storeSlug,
     markup: profile.storeMarkup,
     bundles: bundles.map((b: { id: string; network: string; dataSizeGb: number; validityDays: number; sellingPrice: number }) => ({
@@ -49,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
 
 // POST /api/store/[slug] — customer buys through this agent's storefront.
 // Customer pays via OUR Paystack; the agent's markup is recorded as commission
-// and credited to their wallet on delivery (see fulfillment).
+// and credited to their earnings on delivery (see fulfillment).
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
   const { bundleId, beneficiaryNumber } = await req.json();
 
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
       guestEmail: email,
       bundleId: bundle.id,
       beneficiaryNumber,
-      amount: customerPrice, // customer pays the marked-up price
+      amount: customerPrice,
       paystackReference: reference,
       paymentStatus: "PENDING",
       referredByAgentId: profile.id,
