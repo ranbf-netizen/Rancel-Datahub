@@ -327,15 +327,17 @@ export default function StorePage({ params }: { params: { slug: string } }) {
               autoFocus
             />
             {status && <p className="mt-3 text-sm text-ghRed">{status}</p>}
-            <button className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2" disabled={buying}>
+                        <button className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2" disabled={buying}>
               {buying && <Loader2 size={16} className="animate-spin" />}
               {buying ? "Starting checkout…" : `Pay GH₵ ${selected.price.toFixed(2)}`}
             </button>
           </form>
         </div>
-            )}
+      )}
 
-              <a
+      {/* Floating WhatsApp button with blinking green light */}
+      {whatsapp && (
+        <a
           href={`https://wa.me/${whatsapp}?text=${encodeURIComponent("Hi, I need help with an order")}`}
           target="_blank"
           rel="noopener noreferrer"
