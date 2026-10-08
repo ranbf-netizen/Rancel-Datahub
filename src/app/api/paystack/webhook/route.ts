@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { fulfillDataOrder, fulfillPinOrder, fulfillAgentTopup, fulfillAfaOrder, fulfillDigitalPurchase, fulfillAiCredits, fulfillBoostOrder, fulfillSmsOrder } from "@/lib/fulfillment";
+import { fulfillDataOrder, fulfillPinOrder, fulfillAgentTopup, fulfillAfaOrder, fulfillDigitalPurchase, fulfillAiCredits, fulfillBoostOrder, fulfillSmsWalletTopup } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
     await fulfillAiCredits(reference);
   } else if (orderType === "boost") {
     await fulfillBoostOrder(reference);
-  } else if (orderType === "sms_number") {
-    await fulfillSmsOrder(reference);
+  } else if (orderType === "sms_wallet_topup") {
+    await fulfillSmsWalletTopup(reference);
   }
 
   return NextResponse.json({ received: true });

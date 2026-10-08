@@ -20,6 +20,8 @@ model User {
   agentProfile AgentProfile?
   boostOrders  BoostOrder[]
   smsOrders    SmsOrder[]
+  smsWalletBalance Float                  @default(0)
+  smsWalletTx      SmsWalletTransaction[]
   dataOrders   DataOrder[]
   pinOrders    PinOrder[]
 }
@@ -357,8 +359,23 @@ model SmsOrder {
   fullSms           String?
   status            String    @default("PENDING") // PENDING, WAITING, RECEIVED, EXPIRED, or FAILED: <reason>
   expiresAt         DateTime?
+  refunded          Boolean   @default(false)
   createdAt         DateTime  @default(now())
   user              User      @relation(fields: [userId], references: [id])
+}
+
+// Ledger for the SMS Numbers wallet - every deposit, debit, and refund.
+model SmsWalletTransaction {
+  id                String   @id @default(uuid())
+  userId            String
+  type              String   // DEPOSIT, DEBIT, REFUND
+  amount            Float
+  status            String   @default("COMPLETED") // DEPOSIT starts PENDING until Paystack confirms
+  paystackReference String?  @unique // only set for DEPOSIT
+  relatedOrderId    String?  // the SmsOrder this DEBIT/REFUND belongs to, if any
+  description       String?
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id])
 }
 
 // Independent margin settings for SMS Numbers, deliberately separate from

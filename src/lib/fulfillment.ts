@@ -351,29 +351,35 @@ export async function fulfillBoostOrder(reference: string) {
 
 // SMS number rental: on confirmed payment, rent the number from SMSPool.
 // Same prepaid-balance + refund-on-failure pattern as fulfillBoostOrder.
-export async function fulfillSmsOrder(reference: string) {
-  const order = await prisma.smsOrder.findUnique({ where: { paystackReference: reference } });
-  if (!order) return { found: false as const };
-  if (order.paymentStatus === "PAID") return { found: true as const, alreadyProcessed: true as const };
-  await prisma.smsOrder.update({ where: { paystackReference: reference }, data: { paymentStatus: "PAID" } });
+// SMS orders are no longer paid for via Paystack per-order - they deduct
+// from the buyer's SMS wallet instantly inside the order route, and the
+// rental attempt happens right there too, not via this webhook. This is
+// what the webhook calls when a WALLET DEPOSIT (not an order) is confirmed
+// paid. Paystack can send the same webhook more than once, so this has to
+// be safe against running twice concurrently without double-crediting.
+export async function fulfillSmsWalletTopup(reference: string) {
+  const tx = await prisma.smsWalletTransaction.findUnique({ where: { paystackReference: reference } });
+  if (!tx) return { found: false as const };
+  if (tx.status === "COMPLETED") return { found: true as const, alreadyProcessed: true as const };
 
-  try {
-    const { getSmsPoolBalance, orderSmsPoolNumber } = await import("@/lib/smspool");
-    const bal = await getSmsPoolBalance();
-    if (bal <= 0) throw new Error("SMSPool balance is empty.");
-    const result = await orderSmsPoolNumber({ countryId: order.countryId, serviceId: order.serviceId });
-    await prisma.smsOrder.update({
-      where: { id: order.id },
-      data: {
-        poolOrderId: result.orderId,
-        phoneNumber: result.number,
-        status: "WAITING",
-        expiresAt: new Date(Date.now() + result.expiresInSeconds * 1000),
-      },
+  // Interactive transaction, not array-form: the balance increment only
+  // happens if THIS call actually won the claim (updateMany matched a row
+  // still in PENDING). A concurrent duplicate webhook call sees count === 0
+  // here and correctly does nothing, instead of double-crediting.
+  const claimed = await prisma.$transaction(async (db) => {
+    const result = await db.smsWalletTransaction.updateMany({
+      where: { id: tx.id, status: "PENDING" },
+      data: { status: "COMPLETED" },
     });
-  } catch (err: any) {
-    await prisma.smsOrder.update({ where: { id: order.id }, data: { status: `FAILED: ${err.message}` } });
-    await prisma.refund.create({ data: { orderType: "digital", orderId: order.id, reason: `SMS number rental failed after payment: ${err.message}` } });
-  }
-  return { found: true as const, alreadyProcessed: false as const };
+    if (result.count === 1) {
+      await db.user.update({
+        where: { id: tx.userId },
+        data: { smsWalletBalance: { increment: tx.amount } },
+      });
+      return true;
+    }
+    return false;
+  });
+
+  return { found: true as const, alreadyProcessed: !claimed };
 }
