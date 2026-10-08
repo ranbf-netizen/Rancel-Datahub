@@ -35,16 +35,17 @@ export function StorefrontBar() {
 
   return (
     <header className="border-b border-ink/10 bg-paper/95 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-        {/* Clicking the name returns to the store's bundles */}
-        <Link href={storeHome} className="font-display text-xl font-bold text-ink">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+        {/* Brand — links back to the store */}
+        <Link href={storeHome} className="shrink-0 font-display text-base font-bold text-ink sm:text-xl">
           RanCel <span className="text-primary">DataHub</span>
         </Link>
-        <nav className="flex items-center gap-4 text-sm font-medium sm:gap-6">
-          <Link href={storeHome} className="hover:text-primary">Buy Data</Link>
-          <Link href={`/track${q}`} className="hover:text-primary">Track Order</Link>
-          <Link href={`/afa${q}`} className="hover:text-primary">AFA Registration</Link>
-          <Link href={`/results${q}`} className="hover:text-primary">Results Checker</Link>
+        {/* Nav — scrolls on mobile, shorter labels */}
+        <nav className="flex items-center gap-3 overflow-x-auto text-sm font-medium [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-5">
+          <Link href={storeHome} className="shrink-0 whitespace-nowrap hover:text-primary">Buy Data</Link>
+          <Link href={`/track${q}`} className="shrink-0 whitespace-nowrap hover:text-primary">Track</Link>
+          <Link href={`/afa${q}`} className="shrink-0 whitespace-nowrap hover:text-primary">AFA</Link>
+          <Link href={`/results${q}`} className="shrink-0 whitespace-nowrap hover:text-primary">Results</Link>
         </nav>
       </div>
     </header>
