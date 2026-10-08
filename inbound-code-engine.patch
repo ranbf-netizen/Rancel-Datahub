@@ -1,0 +1,1338 @@
+diff --git a/.env.example b/.env.example
+index 5f466c4..05ba537 100644
+--- a/.env.example
++++ b/.env.example
+@@ -54,3 +54,9 @@ GMAIL_REFRESH_TOKEN=
+ # SMSPool (rented numbers for SMS verification, sold as "SMS Numbers" in the shop)
+ SMSPOOL_API_KEY=
+ SMSPOOL_API_URL="https://api.smspool.net"
++
++# Inbound-code engine (Live sign-in code products)
++# A long random string. Must match the INBOUND_EMAIL_SECRET set in your
++# Cloudflare Email Worker, so only your worker can post received emails to
++# /api/inbound-email.
++INBOUND_EMAIL_SECRET=
+diff --git a/prisma/migrations/20261008120000_add_inbound_code_engine/migration.sql b/prisma/migrations/20261008120000_add_inbound_code_engine/migration.sql
+new file mode 100644
+index 0000000..46334be
+--- /dev/null
++++ b/prisma/migrations/20261008120000_add_inbound_code_engine/migration.sql
+@@ -0,0 +1,55 @@
++-- CreateTable
++CREATE TABLE "CodeAccount" (
++    "id" TEXT NOT NULL,
++    "productId" TEXT NOT NULL,
++    "label" TEXT NOT NULL,
++    "loginEmail" TEXT NOT NULL,
++    "inboundAddress" TEXT NOT NULL,
++    "active" BOOLEAN NOT NULL DEFAULT true,
++    "revealSeconds" INTEGER NOT NULL DEFAULT 60,
++    "turnSeconds" INTEGER NOT NULL DEFAULT 180,
++    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    CONSTRAINT "CodeAccount_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateTable
++CREATE TABLE "CodeSession" (
++    "id" TEXT NOT NULL,
++    "accountId" TEXT NOT NULL,
++    "purchaseId" TEXT NOT NULL,
++    "status" TEXT NOT NULL DEFAULT 'WAITING',
++    "queuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    "activatedAt" TIMESTAMP(3),
++    "revealStartedAt" TIMESTAMP(3),
++    "revealedCode" TEXT,
++    "revealedText" TEXT,
++    "attempts" INTEGER NOT NULL DEFAULT 0,
++    CONSTRAINT "CodeSession_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateTable
++CREATE TABLE "InboundEmail" (
++    "id" TEXT NOT NULL,
++    "accountId" TEXT NOT NULL,
++    "fromAddress" TEXT NOT NULL,
++    "subject" TEXT,
++    "body" TEXT NOT NULL,
++    "extractedCode" TEXT,
++    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    "claimedBySessionId" TEXT,
++    CONSTRAINT "InboundEmail_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateIndex
++CREATE UNIQUE INDEX "CodeAccount_inboundAddress_key" ON "CodeAccount"("inboundAddress");
++CREATE INDEX "CodeAccount_productId_idx" ON "CodeAccount"("productId");
++CREATE UNIQUE INDEX "CodeSession_purchaseId_key" ON "CodeSession"("purchaseId");
++CREATE INDEX "CodeSession_accountId_status_idx" ON "CodeSession"("accountId", "status");
++CREATE UNIQUE INDEX "InboundEmail_claimedBySessionId_key" ON "InboundEmail"("claimedBySessionId");
++CREATE INDEX "InboundEmail_accountId_receivedAt_idx" ON "InboundEmail"("accountId", "receivedAt");
++
++-- AddForeignKey
++ALTER TABLE "CodeAccount" ADD CONSTRAINT "CodeAccount_productId_fkey" FOREIGN KEY ("productId") REFERENCES "DigitalProduct"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++ALTER TABLE "CodeSession" ADD CONSTRAINT "CodeSession_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "CodeAccount"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++ALTER TABLE "CodeSession" ADD CONSTRAINT "CodeSession_purchaseId_fkey" FOREIGN KEY ("purchaseId") REFERENCES "DigitalPurchase"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++ALTER TABLE "InboundEmail" ADD CONSTRAINT "InboundEmail_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "CodeAccount"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index 86edcf2..622e9d8 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -222,6 +222,8 @@ model DigitalProduct {
+   gmailLabel         String?
+   gmailAddress       String?
+   gmailRevealSeconds Int               @default(60)
++  // --- New inbound-code engine ---
++  codeAccounts       CodeAccount[]
+   deliveryMethods    String            @default("DIGITAL")
+   optionsJson        String?
+   requireWhatsapp    Boolean            @default(false)
+@@ -249,6 +251,7 @@ model DigitalPurchase {
+   chosenOption             String?
+   deliveryMethod           String?
+   whatsapp                 String?
++  codeSession              CodeSession?
+   product                  DigitalProduct @relation(fields: [productId], references: [id])
+ }
+ 
+@@ -297,6 +300,66 @@ model BoostOrder {
+   user              User          @relation(fields: [userId], references: [id])
+ }
+ 
++
++// ---------------------------------------------------------------------------
++// Inbound-code engine
++// ---------------------------------------------------------------------------
++// A CodeAccount is one real account you resell access to (e.g. "Netflix #1").
++// Codes for it arrive by email at `inboundAddress` (an address on your own
++// domain, e.g. netflix1@ranceldatahub.shop). Buyers are queued one at a time
++// per account so each verification code goes to exactly one person.
++model CodeAccount {
++  id             String        @id @default(uuid())
++  productId      String
++  label          String        // internal name, e.g. "Netflix #1"
++  loginEmail     String        // what the buyer signs in with (your Gmail or a domain address)
++  inboundAddress String        @unique // where codes are received, e.g. netflix1@ranceldatahub.shop
++  active         Boolean       @default(true)
++  revealSeconds  Int           @default(60)
++  turnSeconds    Int           @default(180) // how long one buyer holds the turn
++  createdAt      DateTime      @default(now())
++  product        DigitalProduct @relation(fields: [productId], references: [id])
++  sessions       CodeSession[]
++  emails         InboundEmail[]
++
++  @@index([productId])
++}
++
++// One buyer's place in the queue for a CodeAccount. Exactly one session per
++// purchase. Status moves: WAITING -> ACTIVE -> (REVEALED | EXPIRED).
++model CodeSession {
++  id             String      @id @default(uuid())
++  accountId      String
++  purchaseId     String      @unique
++  status         String      @default("WAITING") // WAITING | ACTIVE | REVEALED | EXPIRED
++  queuedAt       DateTime    @default(now())
++  activatedAt    DateTime?   // when this buyer's turn started (cutoff for fresh codes)
++  revealStartedAt DateTime?  // when the code was first shown (reveal countdown)
++  revealedCode   String?
++  revealedText   String?
++  attempts       Int         @default(0)
++  account        CodeAccount @relation(fields: [accountId], references: [id])
++  purchase       DigitalPurchase @relation(fields: [purchaseId], references: [id])
++
++  @@index([accountId, status])
++}
++
++// A raw email received at an inbound address, saved by the Cloudflare worker.
++// Claimed by at most one CodeSession (claimedBySessionId) so no code is reused.
++model InboundEmail {
++  id                String      @id @default(uuid())
++  accountId         String
++  fromAddress       String
++  subject           String?
++  body              String      // plain-text body
++  extractedCode     String?
++  receivedAt        DateTime    @default(now())
++  claimedBySessionId String?    @unique
++  account           CodeAccount @relation(fields: [accountId], references: [id])
++
++  @@index([accountId, receivedAt])
++}
++
+ enum Role {
+   CUSTOMER
+   ADMIN
+diff --git a/scripts/cloudflare-email-worker.js b/scripts/cloudflare-email-worker.js
+new file mode 100644
+index 0000000..87db971
+--- /dev/null
++++ b/scripts/cloudflare-email-worker.js
+@@ -0,0 +1,119 @@
++/**
++ * Cloudflare Email Worker — forwards incoming emails to your site.
++ *
++ * When an email arrives at an address you've routed to this worker
++ * (e.g. netflix1@ranceldatahub.shop), Cloudflare runs this worker. It reads the
++ * plain-text body and POSTs it to your site's /api/inbound-email route, which
++ * matches it to the buyer whose turn it is.
++ *
++ * ---------------------------------------------------------------------------
++ * SETUP (one time)
++ * ---------------------------------------------------------------------------
++ * 1. In Cloudflare: your domain → Email → Email Routing → enable it. Cloudflare
++ *    adds the needed DNS records automatically.
++ * 2. Email Routing → Email Workers → Create. Paste this file in. Deploy it.
++ * 3. Email Routing → Routing rules. For each inbound address (netflix1@...,
++ *    netflix2@...), add a custom address that routes to "Send to a Worker" and
++ *    pick this worker.
++ *    (Or set the Catch-all action to this worker to capture every address.)
++ * 4. Worker → Settings → Variables, add:
++ *       SITE_URL           = https://ranceldatahub.shop
++ *       INBOUND_EMAIL_SECRET = (the same long random string you put in Vercel)
++ *    Mark INBOUND_EMAIL_SECRET as "Encrypt".
++ *
++ * Needs the mimetext-free approach below (no npm libs) so it runs as-is.
++ */
++
++export default {
++  async email(message, env) {
++    try {
++      const to = (message.to || "").toLowerCase();
++      const from = message.from || "";
++      const subject = message.headers.get("subject") || "";
++
++      // Read the raw message and pull out a text body.
++      const raw = await streamToString(message.raw);
++      const text = extractPlainText(raw);
++
++      await fetch(`${env.SITE_URL}/api/inbound-email`, {
++        method: "POST",
++        headers: {
++          "Content-Type": "application/json",
++          Authorization: `Bearer ${env.INBOUND_EMAIL_SECRET}`,
++        },
++        body: JSON.stringify({ to, from, subject, text }),
++      });
++    } catch (err) {
++      // Swallow errors so Cloudflare doesn't bounce the mail; the site's sweep
++      // and the buyer's retry cover any miss.
++      console.log("inbound email worker error:", err);
++    }
++  },
++};
++
++async function streamToString(stream) {
++  const reader = stream.getReader();
++  const chunks = [];
++  let done = false;
++  while (!done) {
++    const r = await reader.read();
++    done = r.done;
++    if (r.value) chunks.push(r.value);
++  }
++  const blob = new Blob(chunks);
++  return await blob.text();
++}
++
++/**
++ * Very small MIME reader: returns the text/plain part if present, else strips
++ * HTML tags from a text/html part, else the raw body after the headers.
++ * Good enough for short verification-code emails.
++ */
++function extractPlainText(raw) {
++  const boundaryMatch = raw.match(/boundary="?([^"\r\n;]+)"?/i);
++  const headerEnd = raw.indexOf("\r\n\r\n");
++  const afterHeaders = headerEnd >= 0 ? raw.slice(headerEnd + 4) : raw;
++
++  if (boundaryMatch) {
++    const parts = afterHeaders.split(`--${boundaryMatch[1]}`);
++    let htmlFallback = "";
++    for (const part of parts) {
++      if (/content-type:\s*text\/plain/i.test(part)) {
++        return decodePart(part);
++      }
++      if (/content-type:\s*text\/html/i.test(part)) {
++        htmlFallback = part;
++      }
++    }
++    if (htmlFallback) return stripHtml(decodePart(htmlFallback));
++  }
++
++  // Not multipart.
++  if (/content-type:\s*text\/html/i.test(raw)) return stripHtml(afterHeaders);
++  return afterHeaders.trim();
++}
++
++function decodePart(part) {
++  const bodyStart = part.indexOf("\r\n\r\n");
++  let body = bodyStart >= 0 ? part.slice(bodyStart + 4) : part;
++  if (/content-transfer-encoding:\s*base64/i.test(part)) {
++    try {
++      body = atob(body.replace(/\s+/g, ""));
++    } catch {
++      /* leave as-is */
++    }
++  } else if (/content-transfer-encoding:\s*quoted-printable/i.test(part)) {
++    body = body.replace(/=\r\n/g, "").replace(/=([A-Fa-f0-9]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
++  }
++  return body.trim();
++}
++
++function stripHtml(html) {
++  return html
++    .replace(/<style[\s\S]*?<\/style>/gi, " ")
++    .replace(/<[^>]+>/g, " ")
++    .replace(/&nbsp;/g, " ")
++    .replace(/&amp;/g, "&")
++    .replace(/\s+/g, " ")
++    .trim();
++}
+diff --git a/src/app/admin/code-accounts/page.tsx b/src/app/admin/code-accounts/page.tsx
+new file mode 100644
+index 0000000..383893c
+--- /dev/null
++++ b/src/app/admin/code-accounts/page.tsx
+@@ -0,0 +1,216 @@
++"use client";
++
++import { useEffect, useState } from "react";
++import { Loader2, Plus, Trash2, Mail, Pause, Play, Users } from "lucide-react";
++
++type Product = { id: string; title: string };
++type Account = {
++  id: string;
++  label: string;
++  loginEmail: string;
++  inboundAddress: string;
++  active: boolean;
++  revealSeconds: number;
++  turnSeconds: number;
++  product: { id: string; title: string } | null;
++  _count: { sessions: number };
++};
++
++const BLANK = {
++  productId: "",
++  label: "",
++  loginEmail: "",
++  inboundAddress: "",
++  revealSeconds: 60,
++  turnSeconds: 180,
++};
++
++export default function CodeAccountsPage() {
++  const [accounts, setAccounts] = useState<Account[]>([]);
++  const [products, setProducts] = useState<Product[]>([]);
++  const [form, setForm] = useState({ ...BLANK });
++  const [loading, setLoading] = useState(true);
++  const [saving, setSaving] = useState(false);
++  const [error, setError] = useState("");
++
++  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
++    setForm((f) => ({ ...f, [k]: v }));
++  }
++
++  async function load() {
++    setLoading(true);
++    try {
++      const [a, p] = await Promise.all([
++        fetch("/api/admin/code-accounts", { cache: "no-store" }).then((r) => r.json()),
++        fetch("/api/admin/digital-products", { cache: "no-store" }).then((r) => r.json()),
++      ]);
++      setAccounts(Array.isArray(a) ? a : []);
++      setProducts(
++        (Array.isArray(p) ? p : [])
++          .filter((x: any) => x.deliveryType === "INBOUND_CODE")
++          .map((x: any) => ({ id: x.id, title: x.title }))
++      );
++    } finally {
++      setLoading(false);
++    }
++  }
++
++  useEffect(() => {
++    load();
++  }, []);
++
++  async function create() {
++    setError("");
++    if (!form.productId || !form.label || !form.loginEmail || !form.inboundAddress) {
++      setError("Please fill in product, label, login email and inbound address.");
++      return;
++    }
++    setSaving(true);
++    try {
++      const res = await fetch("/api/admin/code-accounts", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(form),
++      });
++      const data = await res.json();
++      if (!res.ok) {
++        setError(data?.error || "Could not create the account.");
++        return;
++      }
++      setForm({ ...BLANK });
++      await load();
++    } finally {
++      setSaving(false);
++    }
++  }
++
++  async function toggleActive(acc: Account) {
++    await fetch("/api/admin/code-accounts", {
++      method: "PATCH",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ id: acc.id, active: !acc.active }),
++    });
++    load();
++  }
++
++  async function remove(acc: Account) {
++    if (!confirm(`Delete "${acc.label}"? This can't be undone.`)) return;
++    const res = await fetch("/api/admin/code-accounts", {
++      method: "DELETE",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ id: acc.id }),
++    });
++    const data = await res.json();
++    if (!res.ok) alert(data?.error || "Could not delete.");
++    load();
++  }
++
++  return (
++    <div>
++      <h1 className="text-2xl font-bold text-ink">Code Accounts</h1>
++      <p className="mt-1 text-sm text-slate">
++        Each account is one real login you resell (e.g. &ldquo;Netflix #1&rdquo;). Sign-in codes
++        arrive by email at its inbound address and are handed to buyers one at a time.
++      </p>
++
++      {/* Create form */}
++      <div className="card mt-6">
++        <h2 className="text-sm font-semibold text-ink">Add an account</h2>
++
++        {products.length === 0 ? (
++          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
++            First create a Shop product with delivery type <strong>&ldquo;Live sign-in code&rdquo;</strong>,
++            then come back here to attach accounts to it.
++          </p>
++        ) : (
++          <div className="mt-4 grid gap-4 sm:grid-cols-2">
++            <div>
++              <label className="label">Product</label>
++              <select className="field" value={form.productId} onChange={(e) => set("productId", e.target.value)}>
++                <option value="">Select a product…</option>
++                {products.map((p) => (
++                  <option key={p.id} value={p.id}>{p.title}</option>
++                ))}
++              </select>
++            </div>
++
++            <div>
++              <label className="label">Internal label</label>
++              <input className="field" placeholder="Netflix #1" value={form.label} onChange={(e) => set("label", e.target.value)} />
++            </div>
++
++            <div>
++              <label className="label">Login email (buyer signs in with this)</label>
++              <input className="field" placeholder="rancelnetflix@gmail.com" value={form.loginEmail} onChange={(e) => set("loginEmail", e.target.value)} />
++            </div>
++
++            <div>
++              <label className="label">Inbound address (where codes arrive)</label>
++              <input className="field" placeholder="netflix1@ranceldatahub.shop" value={form.inboundAddress} onChange={(e) => set("inboundAddress", e.target.value)} />
++            </div>
++
++            <div>
++              <label className="label">Code visible (seconds)</label>
++              <input className="field" type="number" min={5} value={form.revealSeconds} onChange={(e) => set("revealSeconds", Number(e.target.value))} />
++            </div>
++
++            <div>
++              <label className="label">Turn length (seconds)</label>
++              <input className="field" type="number" min={30} value={form.turnSeconds} onChange={(e) => set("turnSeconds", Number(e.target.value))} />
++            </div>
++          </div>
++        )}
++
++        {error && <p className="mt-3 text-sm font-medium text-ghRed">{error}</p>}
++
++        {products.length > 0 && (
++          <button onClick={create} disabled={saving} className="btn-primary mt-4 gap-2">
++            {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
++            {saving ? "Saving…" : "Add account"}
++          </button>
++        )}
++      </div>
++
++      {/* List */}
++      <div className="mt-8">
++        {loading ? (
++          <p className="inline-flex items-center gap-2 text-slate"><Loader2 size={16} className="animate-spin" /> Loading…</p>
++        ) : accounts.length === 0 ? (
++          <p className="text-sm text-slate">No accounts yet.</p>
++        ) : (
++          <div className="space-y-3">
++            {accounts.map((acc) => (
++              <div key={acc.id} className="card flex flex-wrap items-center justify-between gap-4">
++                <div className="min-w-0">
++                  <div className="flex items-center gap-2">
++                    <p className="font-semibold text-ink">{acc.label}</p>
++                    {acc.active ? (
++                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">Active</span>
++                    ) : (
++                      <span className="rounded-full bg-slate/10 px-2 py-0.5 text-[11px] font-semibold text-slate">Paused</span>
++                    )}
++                  </div>
++                  <p className="mt-1 text-sm text-slate">{acc.product?.title || "— no product —"}</p>
++                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate">
++                    <span className="inline-flex items-center gap-1"><Mail size={12} /> {acc.loginEmail}</span>
++                    <span className="inline-flex items-center gap-1">↳ {acc.inboundAddress}</span>
++                    <span className="inline-flex items-center gap-1"><Users size={12} /> {acc._count.sessions} in queue</span>
++                    <span>code {acc.revealSeconds}s · turn {acc.turnSeconds}s</span>
++                  </div>
++                </div>
++                <div className="flex items-center gap-2">
++                  <button onClick={() => toggleActive(acc)} className="btn-secondary gap-2 px-4 py-2">
++                    {acc.active ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
++                  </button>
++                  <button onClick={() => remove(acc)} className="rounded-xl border border-ghRed/20 bg-ghRed/5 p-2.5 text-ghRed hover:bg-ghRed/10" aria-label="Delete">
++                    <Trash2 size={16} />
++                  </button>
++                </div>
++              </div>
++            ))}
++          </div>
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/app/admin/digital-products/page.tsx b/src/app/admin/digital-products/page.tsx
+index 0783c17..f332f2d 100644
+--- a/src/app/admin/digital-products/page.tsx
++++ b/src/app/admin/digital-products/page.tsx
+@@ -553,6 +553,10 @@ export default function AdminDigitalProducts() {
+               <option value="GMAIL_LATEST">
+                 Reveal Latest Gmail Email (timed, live)
+               </option>
++
++              <option value="INBOUND_CODE">
++                Live sign-in code (queue, recommended)
++              </option>
+             </select>
+ 
+             {form.deliveryType === "REVEAL" ? (
+@@ -649,6 +653,15 @@ export default function AdminDigitalProducts() {
+                   </p>
+                 </div>
+               </div>
++            ) : form.deliveryType === "INBOUND_CODE" ? (
++              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
++                <p className="text-xs font-medium text-ink">Live sign-in code</p>
++                <p className="mt-1 text-xs text-slate">
++                  Save this product, then go to <strong>Code Accounts</strong> in the admin menu to
++                  attach one or more accounts to it. Buyers are queued one at a time per account, and
++                  each code goes to exactly one buyer. No Gmail settings are needed here.
++                </p>
++              </div>
+             ) : form.deliveryType === "MANUAL" ? (
+               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                 <p className="text-xs font-medium text-amber-900">
+diff --git a/src/app/admin/layout.tsx b/src/app/admin/layout.tsx
+index 94788c9..dc57e15 100644
+--- a/src/app/admin/layout.tsx
++++ b/src/app/admin/layout.tsx
+@@ -1,7 +1,7 @@
+ import Link from "next/link";
+ import { redirect } from "next/navigation";
+ import { getSession } from "@/lib/auth";
+-import { LayoutDashboard, BarChart3, Package, Ticket, ShoppingBag, ShoppingCart, ClipboardList, Users, Banknote, Sprout, Megaphone, Rocket, Smartphone, MessageSquare } from "lucide-react";
++import { LayoutDashboard, BarChart3, Package, Ticket, ShoppingBag, ShoppingCart, ClipboardList, Users, Banknote, Sprout, Megaphone, Rocket, Smartphone, MessageSquare, KeyRound } from "lucide-react";
+ 
+ export default function AdminLayout({ children }: { children: React.ReactNode }) {
+   const session = getSession();
+@@ -17,6 +17,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
+         <Link href="/admin/bundles" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Package size={16} /> Data Bundles</Link>
+         {/*<Link href="/admin/pins" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Ticket size={16} /> Results PINs</Link>*/}
+         <Link href="/admin/digital-products" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><ShoppingBag size={16} /> Shop Products</Link>
++        <Link href="/admin/code-accounts" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><KeyRound size={16} /> Code Accounts</Link>
+         <Link href="/admin/boosting" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Rocket size={16} /> Boosting</Link>
+         <Link href="/admin/sms-numbers" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Smartphone size={16} /> SMS Numbers</Link>
+         <Link href="/admin/orders" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><ShoppingCart size={16} /> Orders</Link>
+diff --git a/src/app/api/admin/code-accounts/route.ts b/src/app/api/admin/code-accounts/route.ts
+new file mode 100644
+index 0000000..243a5af
+--- /dev/null
++++ b/src/app/api/admin/code-accounts/route.ts
+@@ -0,0 +1,113 @@
++import { NextRequest, NextResponse } from "next/server";
++import { prisma } from "@/lib/db";
++import { getSession } from "@/lib/auth";
++
++export const dynamic = "force-dynamic";
++
++function admin() {
++  const s = getSession();
++  return s && s.role === "ADMIN" ? s : null;
++}
++
++// Must be a valid email on your own receiving domain.
++function cleanInbound(value: unknown): string | null {
++  const v = String(value || "").toLowerCase().trim();
++  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return null;
++  return v;
++}
++
++export async function GET() {
++  if (!admin()) return NextResponse.json({ error: "Admin only." }, { status: 403 });
++
++  const accounts = await prisma.codeAccount.findMany({
++    orderBy: { createdAt: "desc" },
++    include: {
++      product: { select: { id: true, title: true } },
++      _count: { select: { sessions: { where: { status: { in: ["WAITING", "ACTIVE"] } } } } },
++    },
++  });
++  return NextResponse.json(accounts);
++}
++
++export async function POST(req: NextRequest) {
++  if (!admin()) return NextResponse.json({ error: "Admin only." }, { status: 403 });
++
++  const body = await req.json();
++  const { productId, label, loginEmail, inboundAddress, revealSeconds, turnSeconds } = body;
++
++  if (!productId || !label || !loginEmail) {
++    return NextResponse.json({ error: "Product, label and login email are required." }, { status: 400 });
++  }
++
++  const inbound = cleanInbound(inboundAddress);
++  if (!inbound) {
++    return NextResponse.json({ error: "Enter a valid inbound address, e.g. netflix1@ranceldatahub.shop" }, { status: 400 });
++  }
++
++  const product = await prisma.digitalProduct.findUnique({ where: { id: productId } });
++  if (!product) return NextResponse.json({ error: "Product not found." }, { status: 404 });
++
++  try {
++    const account = await prisma.codeAccount.create({
++      data: {
++        productId,
++        label: String(label).trim(),
++        loginEmail: String(loginEmail).trim(),
++        inboundAddress: inbound,
++        revealSeconds: Number(revealSeconds) > 0 ? Number(revealSeconds) : 60,
++        turnSeconds: Number(turnSeconds) > 0 ? Number(turnSeconds) : 180,
++      },
++    });
++    return NextResponse.json(account);
++  } catch (e: any) {
++    if (String(e?.code) === "P2002") {
++      return NextResponse.json({ error: "That inbound address is already used by another account." }, { status: 409 });
++    }
++    return NextResponse.json({ error: "Could not create the account." }, { status: 500 });
++  }
++}
++
++export async function PATCH(req: NextRequest) {
++  if (!admin()) return NextResponse.json({ error: "Admin only." }, { status: 403 });
++
++  const { id, ...fields } = await req.json();
++  if (!id) return NextResponse.json({ error: "Account ID is required." }, { status: 400 });
++
++  const data: any = {};
++  if (fields.label !== undefined) data.label = String(fields.label).trim();
++  if (fields.loginEmail !== undefined) data.loginEmail = String(fields.loginEmail).trim();
++  if (fields.active !== undefined) data.active = !!fields.active;
++  if (fields.revealSeconds !== undefined) data.revealSeconds = Number(fields.revealSeconds) > 0 ? Number(fields.revealSeconds) : 60;
++  if (fields.turnSeconds !== undefined) data.turnSeconds = Number(fields.turnSeconds) > 0 ? Number(fields.turnSeconds) : 180;
++  if (fields.inboundAddress !== undefined) {
++    const inbound = cleanInbound(fields.inboundAddress);
++    if (!inbound) return NextResponse.json({ error: "Invalid inbound address." }, { status: 400 });
++    data.inboundAddress = inbound;
++  }
++
++  try {
++    const updated = await prisma.codeAccount.update({ where: { id }, data });
++    return NextResponse.json(updated);
++  } catch (e: any) {
++    if (String(e?.code) === "P2002") {
++      return NextResponse.json({ error: "That inbound address is already used by another account." }, { status: 409 });
++    }
++    return NextResponse.json({ error: "Could not update the account." }, { status: 500 });
++  }
++}
++
++export async function DELETE(req: NextRequest) {
++  if (!admin()) return NextResponse.json({ error: "Admin only." }, { status: 403 });
++
++  const { id } = await req.json();
++  if (!id) return NextResponse.json({ error: "Account ID is required." }, { status: 400 });
++
++  // Block deletion if buyers are currently queued, to avoid stranding them.
++  const live = await prisma.codeSession.count({ where: { accountId: id, status: { in: ["WAITING", "ACTIVE"] } } });
++  if (live > 0) {
++    return NextResponse.json({ error: `${live} buyer(s) are currently in this account's queue. Pause it instead, or wait until it's clear.` }, { status: 409 });
++  }
++
++  await prisma.codeAccount.delete({ where: { id } });
++  return NextResponse.json({ ok: true });
++}
+diff --git a/src/app/api/admin/digital-products/route.ts b/src/app/api/admin/digital-products/route.ts
+index 0f86d14..e418694 100644
+--- a/src/app/api/admin/digital-products/route.ts
++++ b/src/app/api/admin/digital-products/route.ts
+@@ -14,6 +14,7 @@ const DELIVERY_TYPES = [
+   "LINK",
+   "REVEAL",
+   "GMAIL_LATEST",
++  "INBOUND_CODE",
+   "MANUAL",
+ ];
+ 
+diff --git a/src/app/api/digital-products/download/route.ts b/src/app/api/digital-products/download/route.ts
+index b8bfe5f..2662354 100644
+--- a/src/app/api/digital-products/download/route.ts
++++ b/src/app/api/digital-products/download/route.ts
+@@ -1,6 +1,7 @@
+ import { NextRequest, NextResponse } from "next/server";
+ import { prisma } from "@/lib/db";
+ import { getFirstGmailCodeAfter } from "@/lib/gmail";
++import { ensureSession, getSessionView, requeue } from "@/lib/codeQueue";
+ 
+ export const dynamic = "force-dynamic";
+ 
+@@ -45,6 +46,10 @@ export async function GET(req: NextRequest) {
+       });
+     }
+ 
++    if (purchase.product.deliveryType === "INBOUND_CODE") {
++      return handleInboundCodeDelivery(purchase, retry);
++    }
++
+     if (purchase.product.deliveryType === "GMAIL_LATEST") {
+       return handleGmailDelivery(purchase, checkCode, retry);
+     }
+@@ -66,6 +71,43 @@ export async function GET(req: NextRequest) {
+   }
+ }
+ 
++// New inbound-code engine: buyer is queued per account, each code goes to
++// exactly one person, codes arrive by email (no Gmail polling).
++async function handleInboundCodeDelivery(purchase: any, retry: boolean) {
++  const product = purchase.product;
++
++  // Make sure this purchase has a queue session on an available account.
++  const sessionId = await ensureSession(purchase.id, product.id);
++  if (!sessionId) {
++    return NextResponse.json({
++      status: "paid",
++      title: product.title,
++      deliveryType: "INBOUND_CODE",
++      phase: "no_account",
++    });
++  }
++
++  const view = retry ? await requeue(purchase.id) : await getSessionView(purchase.id);
++
++  return NextResponse.json({
++    status: "paid",
++    title: product.title,
++    deliveryType: "INBOUND_CODE",
++    loginEmail: view.loginEmail || null,
++    phase: view.phase,
++    positionInQueue: view.positionInQueue,
++    revealInstruction: view.revealInstruction,
++    revealContent: view.revealContent,
++    secondsRemaining: view.secondsRemaining,
++    totalSeconds: view.totalSeconds,
++    turnSecondsLeft: view.turnSecondsLeft,
++    attemptsRemaining:
++      typeof view.attempts === "number" && typeof view.maxAttempts === "number"
++        ? view.maxAttempts - view.attempts
++        : undefined,
++  });
++}
++
+ async function handleGmailDelivery(purchase: any, checkCode: boolean, retry: boolean) {
+   const product = purchase.product;
+   const windowSeconds = product.gmailRevealSeconds || 60;
+diff --git a/src/app/api/inbound-email/route.ts b/src/app/api/inbound-email/route.ts
+new file mode 100644
+index 0000000..953e80e
+--- /dev/null
++++ b/src/app/api/inbound-email/route.ts
+@@ -0,0 +1,52 @@
++import { NextRequest, NextResponse } from "next/server";
++import { ingestInboundEmail } from "@/lib/codeQueue";
++
++export const dynamic = "force-dynamic";
++
++/**
++ * Receives an email that arrived at one of your inbound addresses
++ * (e.g. netflix1@ranceldatahub.shop), forwarded here by the Cloudflare Email
++ * Worker. Protected by a shared secret so only your worker can post to it.
++ *
++ * Expected JSON body:
++ *   { "to": "...", "from": "...", "subject": "...", "text": "..." }
++ * Expected header:
++ *   Authorization: Bearer <INBOUND_EMAIL_SECRET>
++ */
++export async function POST(req: NextRequest) {
++  const secret = process.env.INBOUND_EMAIL_SECRET;
++  if (!secret) {
++    return NextResponse.json({ error: "Inbound email is not configured." }, { status: 503 });
++  }
++
++  const auth = req.headers.get("authorization") || "";
++  if (auth !== `Bearer ${secret}`) {
++    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
++  }
++
++  let payload: any;
++  try {
++    payload = await req.json();
++  } catch {
++    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
++  }
++
++  const to = String(payload?.to || "").toLowerCase().trim();
++  const from = String(payload?.from || "").trim();
++  const subject = payload?.subject ? String(payload.subject) : null;
++  const text = String(payload?.text || payload?.body || "");
++
++  if (!to || !text) {
++    return NextResponse.json({ error: "Missing 'to' or 'text'." }, { status: 400 });
++  }
++
++  const result = await ingestInboundEmail({
++    inboundAddress: to,
++    fromAddress: from,
++    subject,
++    body: text,
++  });
++
++  // Always 200 to the worker so it doesn't retry-storm; report status in body.
++  return NextResponse.json({ received: true, matched: result.ok, reason: result.reason });
++}
+diff --git a/src/app/downloads/page.tsx b/src/app/downloads/page.tsx
+index aee6861..fede360 100644
+--- a/src/app/downloads/page.tsx
++++ b/src/app/downloads/page.tsx
+@@ -72,12 +72,15 @@ function DownloadInner() {
+     accessNote?: string | null;
+     revealContent: string | null;
+     gmailAddress?: string | null;
++    loginEmail?: string | null;
+     revealInstruction?: string | null;
+     secondsRemaining?: number;
+     totalSeconds?: number;
+     secondsWaited?: number;
+     maxWaitSeconds?: number;
+     attemptsRemaining?: number;
++    positionInQueue?: number;
++    turnSecondsLeft?: number;
+     phase?: string;
+   } | null>(null);
+ 
+@@ -113,7 +116,10 @@ function DownloadInner() {
+         setItem(data);
+         setState("paid");
+ 
+-        if (data.deliveryType === "GMAIL_LATEST" && data.phase === "revealed" && typeof data.secondsRemaining === "number") {
++        const isRevealPhase =
++          (data.deliveryType === "GMAIL_LATEST" && data.phase === "revealed") ||
++          (data.deliveryType === "INBOUND_CODE" && data.phase === "revealed");
++        if (isRevealPhase && typeof data.secondsRemaining === "number") {
+           setSecondsLeft(data.secondsRemaining);
+           setTotalSeconds(typeof data.totalSeconds === "number" ? data.totalSeconds : 60);
+         } else {
+@@ -171,12 +177,19 @@ function DownloadInner() {
+   // fresh email to arrive. Stops the moment the phase changes to anything
+   // else (revealed, not_found, not_found_final, expired).
+   useEffect(() => {
+-    if (item?.deliveryType !== "GMAIL_LATEST") return;
+-    if (item?.phase !== "waiting") return;
+-    const t = setInterval(() => loadPurchase({ checkCode: true }), 4000);
+-    return () => clearInterval(t);
++    if (item?.deliveryType === "GMAIL_LATEST" && item?.phase === "waiting") {
++      const t = setInterval(() => loadPurchase({ checkCode: true }), 4000);
++      return () => clearInterval(t);
++    }
++    // Inbound-code: keep polling while queued or while holding the turn, so the
++    // page flips to the code the moment it arrives, or to "your turn" when it
++    // starts. Plain reload (no checkCode) is all the queue engine needs.
++    if (item?.deliveryType === "INBOUND_CODE" && (item?.phase === "waiting_turn" || item?.phase === "active")) {
++      const t = setInterval(() => loadPurchase(), 4000);
++      return () => clearInterval(t);
++    }
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [item?.phase]);
++  }, [item?.phase, item?.deliveryType]);
+ 
+   // Visual countdown for the revealed code. The server remains authoritative.
+   useEffect(() => {
+@@ -231,6 +244,106 @@ function DownloadInner() {
+                 {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copied" : "Copy"}
+               </button>
+             </div>
++          ) : item.deliveryType === "INBOUND_CODE" ? (
++            <div className="mt-5 text-left">
++              {/* WAITING FOR TURN */}
++              {item.phase === "waiting_turn" && (
++                <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5 text-center">
++                  <Loader2 size={26} className="mx-auto animate-spin text-primary" />
++                  <p className="mt-3 text-sm font-semibold text-ink">You&rsquo;re in the queue</p>
++                  <p className="mt-1 text-sm leading-relaxed text-slate">
++                    Someone is signing in right now. You&rsquo;re position{" "}
++                    <span className="font-bold text-ink">{item.positionInQueue ?? "—"}</span>. Your
++                    turn will start automatically, usually within a minute or two. Keep this page open.
++                  </p>
++                </div>
++              )}
++
++              {/* YOUR TURN - go request the code */}
++              {item.phase === "active" && (
++                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
++                  <div className="flex items-start gap-3">
++                    <div className="mt-0.5 rounded-full bg-primary/10 p-2"><MailOpen size={18} className="text-primary" /></div>
++                    <div className="min-w-0">
++                      <p className="text-sm font-bold text-primary">It&rsquo;s your turn — sign in now</p>
++                      <p className="mt-1 text-sm leading-relaxed text-slate">
++                        Open the service, sign in with the email below, and tap &ldquo;send code&rdquo;.
++                        The code will appear here automatically as soon as it arrives.
++                      </p>
++                      <p className="mt-2 break-all text-sm font-bold text-ink">{item.loginEmail || "Login email not configured"}</p>
++                    </div>
++                  </div>
++                  <div className="mt-4 inline-flex items-center gap-2 text-xs text-slate">
++                    <Loader2 size={13} className="animate-spin" /> Waiting for your code
++                    {typeof item.turnSecondsLeft === "number" && <> · {item.turnSecondsLeft}s left in your turn</>}
++                  </div>
++                </div>
++              )}
++
++              {/* CODE REVEALED */}
++              {item.phase === "revealed" && item.revealContent && (
++                <div className="overflow-hidden rounded-2xl border border-primary/15 bg-white shadow-sm">
++                  <div className="flex items-center justify-between gap-3 border-b border-ink/5 bg-gradient-to-r from-primary/5 to-transparent px-4 py-3">
++                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink"><MailOpen size={16} className="text-primary" /> Your sign-in code</span>
++                    {secondsLeft !== null && <CountdownRing secondsLeft={secondsLeft} totalSeconds={totalSeconds} />}
++                  </div>
++                  <div className="px-4 py-5 text-center">
++                    {item.revealInstruction && <p className="mb-3 text-sm leading-relaxed text-slate">{item.revealInstruction}</p>}
++                    <div className="rounded-xl bg-mist px-4 py-5">
++                      <p className="font-mono text-3xl font-bold tracking-[0.2em] text-ink">{item.revealContent}</p>
++                    </div>
++                  </div>
++                  <div className="flex items-center justify-between gap-2 border-t border-ink/5 bg-mist/60 px-4 py-2.5">
++                    <span className="inline-flex items-center gap-1.5 text-xs text-slate">
++                      <Clock size={12} />
++                      {secondsLeft !== null && secondsLeft <= 10 ? "Closing fast — grab this now" : "This code will disappear automatically"}
++                    </span>
++                    <button onClick={copyContent} className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white px-2.5 py-1 text-xs font-medium text-ink hover:bg-mist">
++                      {copied ? <Check size={13} className="text-ghGreen" /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}
++                    </button>
++                  </div>
++                </div>
++              )}
++
++              {/* TURN EXPIRED - retry or final */}
++              {item.phase === "expired" && (
++                <div className="rounded-2xl border border-ghRed/20 bg-ghRed/5 p-5">
++                  <div className="flex items-start gap-3">
++                    <TriangleAlert size={20} className="mt-0.5 shrink-0 text-ghRed" />
++                    <div>
++                      <p className="text-sm font-bold text-ghRed">No code arrived in time</p>
++                      <p className="mt-2 text-sm leading-relaxed text-slate">
++                        Your turn ended before a code came through. You can rejoin the queue and try again.
++                      </p>
++                      {typeof item.attemptsRemaining === "number" && (
++                        <p className="mt-2 text-xs leading-relaxed text-slate">
++                          {item.attemptsRemaining > 0
++                            ? `${item.attemptsRemaining} attempt${item.attemptsRemaining === 1 ? "" : "s"} remaining.`
++                            : "No attempts remaining — this order has been flagged for review. Please contact support with your payment reference."}
++                        </p>
++                      )}
++                    </div>
++                  </div>
++                  {(item.attemptsRemaining === undefined || item.attemptsRemaining > 0) && (
++                    <button onClick={retryCheck} disabled={checkingCode} className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 disabled:opacity-50">
++                      {checkingCode ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
++                      {checkingCode ? "Rejoining…" : "Rejoin the queue"}
++                    </button>
++                  )}
++                </div>
++              )}
++
++              {/* NO ACCOUNT CONFIGURED */}
++              {item.phase === "no_account" && (
++                <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
++                  <p className="text-sm font-semibold text-ink">Almost there</p>
++                  <p className="mt-2 text-sm leading-relaxed text-slate">
++                    Your payment was successful, but this product has no account available right now.
++                    Please contact support with your payment reference and it&rsquo;ll be sorted quickly.
++                  </p>
++                </div>
++              )}
++            </div>
+           ) : item.deliveryType === "GMAIL_LATEST" ? (
+             <div className="mt-5 text-left">
+               {/* READY / FIRST VISIT - start the check BEFORE requesting the code */}
+diff --git a/src/app/shop/[id]/page.tsx b/src/app/shop/[id]/page.tsx
+index b6798d3..3e2ee42 100644
+--- a/src/app/shop/[id]/page.tsx
++++ b/src/app/shop/[id]/page.tsx
+@@ -100,6 +100,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
+     }
+ 
+     if (p.deliveryType === "GMAIL_LATEST") return "Auto Delivered";
++    if (p.deliveryType === "INBOUND_CODE") return "Auto Delivered";
+     if (p.deliveryType === "LINK") return "Access link";
+     if (p.deliveryType === "REVEAL") return "Instant details";
+ 
+diff --git a/src/lib/codeExtract.ts b/src/lib/codeExtract.ts
+new file mode 100644
+index 0000000..8012c0d
+--- /dev/null
++++ b/src/lib/codeExtract.ts
+@@ -0,0 +1,56 @@
++/**
++ * Extracts a verification / sign-in code from a plain-text email body.
++ *
++ * Used by the inbound-code engine. Intentionally conservative: it prefers a
++ * code sitting next to a recognised phrase ("your code is", "OTP", etc.), and
++ * only falls back to a bare 4-8 digit number if nothing better is found.
++ *
++ * Returns null when no plausible code is present, so the email can be held for
++ * manual admin review instead of showing a buyer something random.
++ */
++export function extractCode(rawBody: string): string | null {
++  if (!rawBody) return null;
++
++  const text = rawBody
++    .replace(/\r/g, " ")
++    .replace(/\n+/g, " ")
++    .replace(/\s+/g, " ")
++    .trim();
++
++  // 1) Code near a recognised verification phrase (strongest signal).
++  const labelled: RegExp[] = [
++    /(?:your\s+)?(?:verification|security|sign[\s-]?in|log[\s-]?in|login|confirmation|access|one[\s-]?time)\s+(?:code|password|pin)\s+(?:is\s+)?[:\-]?\s*([A-Z0-9]{4,8})\b/i,
++    /\b(?:OTP|code|pin)\s*(?:is\s+)?[:\-]\s*([A-Z0-9]{4,8})\b/i,
++    /\b(?:use|enter|type|input)\s+(?:the\s+)?(?:code\s+)?([A-Z0-9]{4,8})\s+(?:to\s+)?(?:sign\s*in|log\s*in|login|verify|continue|confirm)\b/i,
++    /\b([0-9]{4,8})\s+is\s+your\b/i,
++  ];
++
++  for (const re of labelled) {
++    const m = text.match(re);
++    if (m?.[1]) return m[1].toUpperCase();
++  }
++
++  // 2) Fallback: a standalone 4-8 digit number that looks like a code.
++  // Require word boundaries and avoid years / phone-number-like runs.
++  const bare = text.match(/\b(\d{4,8})\b/g);
++  if (bare && bare.length) {
++    // Prefer the first 4-8 digit group that isn't an obvious year.
++    const pick = bare.find((n) => {
++      const v = Number(n);
++      const looksLikeYear = n.length === 4 && v >= 1990 && v <= 2099;
++      return !looksLikeYear;
++    });
++    if (pick) return pick;
++  }
++
++  return null;
++}
++
++/** Short, buyer-facing instruction based on the email's wording. */
++export function instructionFor(rawBody: string): string {
++  const t = (rawBody || "").toLowerCase();
++  if (/sign[\s-]?in|log[\s-]?in|login/.test(t)) return "Use this code to sign in.";
++  if (/verify|verification/.test(t)) return "Use this code to verify.";
++  if (/confirm|confirmation/.test(t)) return "Use this code to confirm.";
++  return "Use this code to continue.";
++}
+diff --git a/src/lib/codeQueue.ts b/src/lib/codeQueue.ts
+new file mode 100644
+index 0000000..fef63bc
+--- /dev/null
++++ b/src/lib/codeQueue.ts
+@@ -0,0 +1,276 @@
++/**
++ * The inbound-code queue engine.
++ *
++ * Guarantees:
++ *  - At most ONE buyer is ACTIVE (holding the turn) per CodeAccount at a time.
++ *  - Each InboundEmail is claimed by at most one CodeSession, so a code is
++ *    never shown to two buyers (enforced by the unique claimedBySessionId
++ *    column + a transaction).
++ *  - Turns time out, so a buyer who never requests a code can't block the queue.
++ *
++ * All the tricky concurrency is handled with conditional updateMany + unique
++ * constraints rather than long-held locks, which suits serverless (Vercel).
++ */
++import { prisma } from "@/lib/db";
++import { extractCode, instructionFor } from "@/lib/codeExtract";
++
++export type SessionView = {
++  phase: "waiting_turn" | "active" | "revealed" | "expired" | "no_account";
++  positionInQueue?: number;
++  loginEmail?: string;
++  revealInstruction?: string;
++  revealContent?: string;
++  secondsRemaining?: number;
++  totalSeconds?: number;
++  turnSecondsLeft?: number;
++  attempts?: number;
++  maxAttempts?: number;
++};
++
++const MAX_ATTEMPTS = 3;
++
++/**
++ * Ensure a CodeSession row exists for this purchase, attached to an available
++ * account for the product. Returns the session id, or null if the product has
++ * no code accounts configured.
++ */
++export async function ensureSession(purchaseId: string, productId: string): Promise<string | null> {
++  const existing = await prisma.codeSession.findUnique({ where: { purchaseId } });
++  if (existing) return existing.id;
++
++  // Pick the account with the fewest people waiting, to spread load.
++  const accounts = await prisma.codeAccount.findMany({
++    where: { productId, active: true },
++    include: { _count: { select: { sessions: { where: { status: { in: ["WAITING", "ACTIVE"] } } } } } },
++  });
++  if (!accounts.length) return null;
++
++  accounts.sort((a: (typeof accounts)[number], b: (typeof accounts)[number]) => a._count.sessions - b._count.sessions);
++  const account = accounts[0];
++
++  try {
++    const created = await prisma.codeSession.create({
++      data: { accountId: account.id, purchaseId, status: "WAITING" },
++    });
++    return created.id;
++  } catch {
++    // Unique race: another request created it first.
++    const again = await prisma.codeSession.findUnique({ where: { purchaseId } });
++    return again?.id ?? null;
++  }
++}
++
++/**
++ * Expire any ACTIVE turn on this account whose turnSeconds have elapsed, and
++ * promote the oldest WAITING session to ACTIVE if the account is free.
++ */
++async function advanceQueue(accountId: string, turnSeconds: number) {
++  const now = Date.now();
++
++  // 1) Expire a stale active turn.
++  const active = await prisma.codeSession.findFirst({
++    where: { accountId, status: "ACTIVE" },
++  });
++  if (active?.activatedAt) {
++    const elapsed = (now - active.activatedAt.getTime()) / 1000;
++    if (elapsed > turnSeconds) {
++      await prisma.codeSession.updateMany({
++        where: { id: active.id, status: "ACTIVE" },
++        data: { status: "EXPIRED" },
++      });
++    }
++  }
++
++  // 2) If nobody is ACTIVE now, promote the oldest WAITING session.
++  const stillActive = await prisma.codeSession.count({ where: { accountId, status: "ACTIVE" } });
++  if (stillActive === 0) {
++    const next = await prisma.codeSession.findFirst({
++      where: { accountId, status: "WAITING" },
++      orderBy: { queuedAt: "asc" },
++    });
++    if (next) {
++      // Conditional promote: only succeeds if still WAITING and still nobody ACTIVE.
++      await prisma.codeSession.updateMany({
++        where: { id: next.id, status: "WAITING" },
++        data: { status: "ACTIVE", activatedAt: new Date() },
++      });
++    }
++  }
++}
++
++/**
++ * Try to hand the active buyer a fresh, unclaimed code. Matches only emails
++ * that arrived AFTER their turn started, and claims one atomically.
++ */
++async function tryRevealForActive(sessionId: string): Promise<boolean> {
++  const session = await prisma.codeSession.findUnique({ where: { id: sessionId } });
++  if (!session || session.status !== "ACTIVE" || !session.activatedAt) return false;
++
++  const email = await prisma.inboundEmail.findFirst({
++    where: {
++      accountId: session.accountId,
++      claimedBySessionId: null,
++      extractedCode: { not: null },
++      receivedAt: { gt: session.activatedAt },
++    },
++    orderBy: { receivedAt: "asc" },
++  });
++  if (!email) return false;
++
++  // Claim the email for this session. The unique constraint on
++  // claimedBySessionId + the WHERE guard means only one session can win.
++  try {
++    const claimed = await prisma.inboundEmail.updateMany({
++      where: { id: email.id, claimedBySessionId: null },
++      data: { claimedBySessionId: sessionId },
++    });
++    if (claimed.count !== 1) return false;
++  } catch {
++    return false;
++  }
++
++  await prisma.codeSession.update({
++    where: { id: sessionId },
++    data: {
++      status: "REVEALED",
++      revealStartedAt: new Date(),
++      revealedCode: email.extractedCode,
++      revealedText: instructionFor(email.body),
++    },
++  });
++  return true;
++}
++
++/** The main read used by the downloads page each poll. */
++export async function getSessionView(purchaseId: string): Promise<SessionView> {
++  const session = await prisma.codeSession.findUnique({
++    where: { purchaseId },
++    include: { account: true },
++  });
++  if (!session) return { phase: "no_account" };
++
++  const account = session.account;
++  const now = Date.now();
++
++  // Already revealed: report remaining display time.
++  if (session.status === "REVEALED" && session.revealStartedAt && session.revealedCode) {
++    const elapsed = Math.floor((now - session.revealStartedAt.getTime()) / 1000);
++    const remaining = Math.max(0, account.revealSeconds - elapsed);
++    if (remaining > 0) {
++      return {
++        phase: "revealed",
++        loginEmail: account.loginEmail,
++        revealInstruction: session.revealedText || "Use this code to continue.",
++        revealContent: session.revealedCode,
++        secondsRemaining: remaining,
++        totalSeconds: account.revealSeconds,
++      };
++    }
++    return { phase: "expired" };
++  }
++
++  if (session.status === "EXPIRED") return { phase: "expired" };
++
++  // Move the queue forward before deciding what to show.
++  await advanceQueue(session.accountId, account.turnSeconds);
++
++  // Re-read after advancing.
++  const fresh = await prisma.codeSession.findUnique({ where: { id: session.id } });
++  if (!fresh) return { phase: "no_account" };
++
++  if (fresh.status === "ACTIVE") {
++    // See if a code is already waiting for this active buyer.
++    const revealed = await tryRevealForActive(fresh.id);
++    if (revealed) return getSessionView(purchaseId);
++
++    const turnLeft = fresh.activatedAt
++      ? Math.max(0, account.turnSeconds - Math.floor((now - fresh.activatedAt.getTime()) / 1000))
++      : account.turnSeconds;
++
++    return {
++      phase: "active",
++      loginEmail: account.loginEmail,
++      turnSecondsLeft: turnLeft,
++      attempts: fresh.attempts,
++      maxAttempts: MAX_ATTEMPTS,
++    };
++  }
++
++  if (fresh.status === "REVEALED") return getSessionView(purchaseId);
++  if (fresh.status === "EXPIRED") return { phase: "expired" };
++
++  // Still WAITING: compute position in the queue.
++  const ahead = await prisma.codeSession.count({
++    where: {
++      accountId: fresh.accountId,
++      status: { in: ["WAITING", "ACTIVE"] },
++      queuedAt: { lt: fresh.queuedAt },
++    },
++  });
++  return { phase: "waiting_turn", positionInQueue: ahead + 1, loginEmail: account.loginEmail };
++}
++
++/**
++ * Buyer asks for another turn after theirs expired without a code. Re-queues
++ * the session if they still have attempts left; otherwise flags a refund.
++ */
++export async function requeue(purchaseId: string): Promise<SessionView> {
++  const session = await prisma.codeSession.findUnique({ where: { purchaseId }, include: { account: true } });
++  if (!session) return { phase: "no_account" };
++
++  if (session.status === "EXPIRED") {
++    if (session.attempts + 1 >= MAX_ATTEMPTS) {
++      // Out of attempts: flag a refund (best-effort) and leave expired.
++      try {
++        await prisma.refund.create({
++          data: {
++            orderType: "digital",
++            orderId: session.purchaseId,
++            reason: "Code never arrived after all attempts (inbound-code engine).",
++          },
++        });
++      } catch {}
++      return { phase: "expired" };
++    }
++    await prisma.codeSession.updateMany({
++      where: { id: session.id, status: "EXPIRED" },
++      data: { status: "WAITING", attempts: { increment: 1 }, activatedAt: null, queuedAt: new Date() },
++    });
++  }
++  return getSessionView(purchaseId);
++}
++
++/**
++ * Called by the inbound-email webhook. Saves the email, extracts a code, and
++ * immediately tries to hand it to whoever is ACTIVE on the account.
++ */
++export async function ingestInboundEmail(params: {
++  inboundAddress: string;
++  fromAddress: string;
++  subject?: string | null;
++  body: string;
++}): Promise<{ ok: boolean; reason?: string }> {
++  const account = await prisma.codeAccount.findUnique({
++    where: { inboundAddress: params.inboundAddress.toLowerCase().trim() },
++  });
++  if (!account) return { ok: false, reason: "No account for this address." };
++
++  const code = extractCode(params.body);
++
++  await prisma.inboundEmail.create({
++    data: {
++      accountId: account.id,
++      fromAddress: params.fromAddress,
++      subject: params.subject || null,
++      body: params.body.slice(0, 20000),
++      extractedCode: code,
++    },
++  });
++
++  // Make sure someone holds the turn, then try to reveal.
++  await advanceQueue(account.id, account.turnSeconds);
++  const active = await prisma.codeSession.findFirst({ where: { accountId: account.id, status: "ACTIVE" } });
++  if (active) await tryRevealForActive(active.id);
++
++  return { ok: true };
++}

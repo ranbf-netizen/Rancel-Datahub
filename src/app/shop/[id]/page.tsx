@@ -100,6 +100,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     }
 
     if (p.deliveryType === "GMAIL_LATEST") return "Auto Delivered";
+    if (p.deliveryType === "INBOUND_CODE") return "Auto Delivered";
     if (p.deliveryType === "LINK") return "Access link";
     if (p.deliveryType === "REVEAL") return "Instant details";
 

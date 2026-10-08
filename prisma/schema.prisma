@@ -222,6 +222,8 @@ model DigitalProduct {
   gmailLabel         String?
   gmailAddress       String?
   gmailRevealSeconds Int               @default(60)
+  // --- New inbound-code engine ---
+  codeAccounts       CodeAccount[]
   deliveryMethods    String            @default("DIGITAL")
   optionsJson        String?
   requireWhatsapp    Boolean            @default(false)
@@ -249,6 +251,7 @@ model DigitalPurchase {
   chosenOption             String?
   deliveryMethod           String?
   whatsapp                 String?
+  codeSession              CodeSession?
   product                  DigitalProduct @relation(fields: [productId], references: [id])
 }
 
@@ -295,6 +298,66 @@ model BoostOrder {
   panelStatus       String?
   createdAt         DateTime      @default(now())
   user              User          @relation(fields: [userId], references: [id])
+}
+
+
+// ---------------------------------------------------------------------------
+// Inbound-code engine
+// ---------------------------------------------------------------------------
+// A CodeAccount is one real account you resell access to (e.g. "Netflix #1").
+// Codes for it arrive by email at `inboundAddress` (an address on your own
+// domain, e.g. netflix1@ranceldatahub.shop). Buyers are queued one at a time
+// per account so each verification code goes to exactly one person.
+model CodeAccount {
+  id             String        @id @default(uuid())
+  productId      String
+  label          String        // internal name, e.g. "Netflix #1"
+  loginEmail     String        // what the buyer signs in with (your Gmail or a domain address)
+  inboundAddress String        @unique // where codes are received, e.g. netflix1@ranceldatahub.shop
+  active         Boolean       @default(true)
+  revealSeconds  Int           @default(60)
+  turnSeconds    Int           @default(180) // how long one buyer holds the turn
+  createdAt      DateTime      @default(now())
+  product        DigitalProduct @relation(fields: [productId], references: [id])
+  sessions       CodeSession[]
+  emails         InboundEmail[]
+
+  @@index([productId])
+}
+
+// One buyer's place in the queue for a CodeAccount. Exactly one session per
+// purchase. Status moves: WAITING -> ACTIVE -> (REVEALED | EXPIRED).
+model CodeSession {
+  id             String      @id @default(uuid())
+  accountId      String
+  purchaseId     String      @unique
+  status         String      @default("WAITING") // WAITING | ACTIVE | REVEALED | EXPIRED
+  queuedAt       DateTime    @default(now())
+  activatedAt    DateTime?   // when this buyer's turn started (cutoff for fresh codes)
+  revealStartedAt DateTime?  // when the code was first shown (reveal countdown)
+  revealedCode   String?
+  revealedText   String?
+  attempts       Int         @default(0)
+  account        CodeAccount @relation(fields: [accountId], references: [id])
+  purchase       DigitalPurchase @relation(fields: [purchaseId], references: [id])
+
+  @@index([accountId, status])
+}
+
+// A raw email received at an inbound address, saved by the Cloudflare worker.
+// Claimed by at most one CodeSession (claimedBySessionId) so no code is reused.
+model InboundEmail {
+  id                String      @id @default(uuid())
+  accountId         String
+  fromAddress       String
+  subject           String?
+  body              String      // plain-text body
+  extractedCode     String?
+  receivedAt        DateTime    @default(now())
+  claimedBySessionId String?    @unique
+  account           CodeAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, receivedAt])
 }
 
 enum Role {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getFirstGmailCodeAfter } from "@/lib/gmail";
+import { ensureSession, getSessionView, requeue } from "@/lib/codeQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (purchase.product.deliveryType === "INBOUND_CODE") {
+      return handleInboundCodeDelivery(purchase, retry);
+    }
+
     if (purchase.product.deliveryType === "GMAIL_LATEST") {
       return handleGmailDelivery(purchase, checkCode, retry);
     }
@@ -64,6 +69,43 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// New inbound-code engine: buyer is queued per account, each code goes to
+// exactly one person, codes arrive by email (no Gmail polling).
+async function handleInboundCodeDelivery(purchase: any, retry: boolean) {
+  const product = purchase.product;
+
+  // Make sure this purchase has a queue session on an available account.
+  const sessionId = await ensureSession(purchase.id, product.id);
+  if (!sessionId) {
+    return NextResponse.json({
+      status: "paid",
+      title: product.title,
+      deliveryType: "INBOUND_CODE",
+      phase: "no_account",
+    });
+  }
+
+  const view = retry ? await requeue(purchase.id) : await getSessionView(purchase.id);
+
+  return NextResponse.json({
+    status: "paid",
+    title: product.title,
+    deliveryType: "INBOUND_CODE",
+    loginEmail: view.loginEmail || null,
+    phase: view.phase,
+    positionInQueue: view.positionInQueue,
+    revealInstruction: view.revealInstruction,
+    revealContent: view.revealContent,
+    secondsRemaining: view.secondsRemaining,
+    totalSeconds: view.totalSeconds,
+    turnSecondsLeft: view.turnSecondsLeft,
+    attemptsRemaining:
+      typeof view.attempts === "number" && typeof view.maxAttempts === "number"
+        ? view.maxAttempts - view.attempts
+        : undefined,
+  });
 }
 
 async function handleGmailDelivery(purchase: any, checkCode: boolean, retry: boolean) {

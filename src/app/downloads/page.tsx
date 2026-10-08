@@ -72,12 +72,15 @@ function DownloadInner() {
     accessNote?: string | null;
     revealContent: string | null;
     gmailAddress?: string | null;
+    loginEmail?: string | null;
     revealInstruction?: string | null;
     secondsRemaining?: number;
     totalSeconds?: number;
     secondsWaited?: number;
     maxWaitSeconds?: number;
     attemptsRemaining?: number;
+    positionInQueue?: number;
+    turnSecondsLeft?: number;
     phase?: string;
   } | null>(null);
 
@@ -113,7 +116,10 @@ function DownloadInner() {
         setItem(data);
         setState("paid");
 
-        if (data.deliveryType === "GMAIL_LATEST" && data.phase === "revealed" && typeof data.secondsRemaining === "number") {
+        const isRevealPhase =
+          (data.deliveryType === "GMAIL_LATEST" && data.phase === "revealed") ||
+          (data.deliveryType === "INBOUND_CODE" && data.phase === "revealed");
+        if (isRevealPhase && typeof data.secondsRemaining === "number") {
           setSecondsLeft(data.secondsRemaining);
           setTotalSeconds(typeof data.totalSeconds === "number" ? data.totalSeconds : 60);
         } else {
@@ -171,12 +177,19 @@ function DownloadInner() {
   // fresh email to arrive. Stops the moment the phase changes to anything
   // else (revealed, not_found, not_found_final, expired).
   useEffect(() => {
-    if (item?.deliveryType !== "GMAIL_LATEST") return;
-    if (item?.phase !== "waiting") return;
-    const t = setInterval(() => loadPurchase({ checkCode: true }), 4000);
-    return () => clearInterval(t);
+    if (item?.deliveryType === "GMAIL_LATEST" && item?.phase === "waiting") {
+      const t = setInterval(() => loadPurchase({ checkCode: true }), 4000);
+      return () => clearInterval(t);
+    }
+    // Inbound-code: keep polling while queued or while holding the turn, so the
+    // page flips to the code the moment it arrives, or to "your turn" when it
+    // starts. Plain reload (no checkCode) is all the queue engine needs.
+    if (item?.deliveryType === "INBOUND_CODE" && (item?.phase === "waiting_turn" || item?.phase === "active")) {
+      const t = setInterval(() => loadPurchase(), 4000);
+      return () => clearInterval(t);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.phase]);
+  }, [item?.phase, item?.deliveryType]);
 
   // Visual countdown for the revealed code. The server remains authoritative.
   useEffect(() => {
@@ -230,6 +243,106 @@ function DownloadInner() {
               <button onClick={copyContent} className="btn-primary mt-3 inline-flex items-center gap-2">
                 {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copied" : "Copy"}
               </button>
+            </div>
+          ) : item.deliveryType === "INBOUND_CODE" ? (
+            <div className="mt-5 text-left">
+              {/* WAITING FOR TURN */}
+              {item.phase === "waiting_turn" && (
+                <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5 text-center">
+                  <Loader2 size={26} className="mx-auto animate-spin text-primary" />
+                  <p className="mt-3 text-sm font-semibold text-ink">You&rsquo;re in the queue</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate">
+                    Someone is signing in right now. You&rsquo;re position{" "}
+                    <span className="font-bold text-ink">{item.positionInQueue ?? "—"}</span>. Your
+                    turn will start automatically, usually within a minute or two. Keep this page open.
+                  </p>
+                </div>
+              )}
+
+              {/* YOUR TURN - go request the code */}
+              {item.phase === "active" && (
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 rounded-full bg-primary/10 p-2"><MailOpen size={18} className="text-primary" /></div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-primary">It&rsquo;s your turn — sign in now</p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate">
+                        Open the service, sign in with the email below, and tap &ldquo;send code&rdquo;.
+                        The code will appear here automatically as soon as it arrives.
+                      </p>
+                      <p className="mt-2 break-all text-sm font-bold text-ink">{item.loginEmail || "Login email not configured"}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 inline-flex items-center gap-2 text-xs text-slate">
+                    <Loader2 size={13} className="animate-spin" /> Waiting for your code
+                    {typeof item.turnSecondsLeft === "number" && <> · {item.turnSecondsLeft}s left in your turn</>}
+                  </div>
+                </div>
+              )}
+
+              {/* CODE REVEALED */}
+              {item.phase === "revealed" && item.revealContent && (
+                <div className="overflow-hidden rounded-2xl border border-primary/15 bg-white shadow-sm">
+                  <div className="flex items-center justify-between gap-3 border-b border-ink/5 bg-gradient-to-r from-primary/5 to-transparent px-4 py-3">
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink"><MailOpen size={16} className="text-primary" /> Your sign-in code</span>
+                    {secondsLeft !== null && <CountdownRing secondsLeft={secondsLeft} totalSeconds={totalSeconds} />}
+                  </div>
+                  <div className="px-4 py-5 text-center">
+                    {item.revealInstruction && <p className="mb-3 text-sm leading-relaxed text-slate">{item.revealInstruction}</p>}
+                    <div className="rounded-xl bg-mist px-4 py-5">
+                      <p className="font-mono text-3xl font-bold tracking-[0.2em] text-ink">{item.revealContent}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-ink/5 bg-mist/60 px-4 py-2.5">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate">
+                      <Clock size={12} />
+                      {secondsLeft !== null && secondsLeft <= 10 ? "Closing fast — grab this now" : "This code will disappear automatically"}
+                    </span>
+                    <button onClick={copyContent} className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-white px-2.5 py-1 text-xs font-medium text-ink hover:bg-mist">
+                      {copied ? <Check size={13} className="text-ghGreen" /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TURN EXPIRED - retry or final */}
+              {item.phase === "expired" && (
+                <div className="rounded-2xl border border-ghRed/20 bg-ghRed/5 p-5">
+                  <div className="flex items-start gap-3">
+                    <TriangleAlert size={20} className="mt-0.5 shrink-0 text-ghRed" />
+                    <div>
+                      <p className="text-sm font-bold text-ghRed">No code arrived in time</p>
+                      <p className="mt-2 text-sm leading-relaxed text-slate">
+                        Your turn ended before a code came through. You can rejoin the queue and try again.
+                      </p>
+                      {typeof item.attemptsRemaining === "number" && (
+                        <p className="mt-2 text-xs leading-relaxed text-slate">
+                          {item.attemptsRemaining > 0
+                            ? `${item.attemptsRemaining} attempt${item.attemptsRemaining === 1 ? "" : "s"} remaining.`
+                            : "No attempts remaining — this order has been flagged for review. Please contact support with your payment reference."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {(item.attemptsRemaining === undefined || item.attemptsRemaining > 0) && (
+                    <button onClick={retryCheck} disabled={checkingCode} className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 disabled:opacity-50">
+                      {checkingCode ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                      {checkingCode ? "Rejoining…" : "Rejoin the queue"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* NO ACCOUNT CONFIGURED */}
+              {item.phase === "no_account" && (
+                <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
+                  <p className="text-sm font-semibold text-ink">Almost there</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate">
+                    Your payment was successful, but this product has no account available right now.
+                    Please contact support with your payment reference and it&rsquo;ll be sorted quickly.
+                  </p>
+                </div>
+              )}
             </div>
           ) : item.deliveryType === "GMAIL_LATEST" ? (
             <div className="mt-5 text-left">

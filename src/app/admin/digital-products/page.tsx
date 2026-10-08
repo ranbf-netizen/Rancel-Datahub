@@ -553,6 +553,10 @@ export default function AdminDigitalProducts() {
               <option value="GMAIL_LATEST">
                 Reveal Latest Gmail Email (timed, live)
               </option>
+
+              <option value="INBOUND_CODE">
+                Live sign-in code (queue, recommended)
+              </option>
             </select>
 
             {form.deliveryType === "REVEAL" ? (
@@ -648,6 +652,15 @@ export default function AdminDigitalProducts() {
                     to the customer.
                   </p>
                 </div>
+              </div>
+            ) : form.deliveryType === "INBOUND_CODE" ? (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <p className="text-xs font-medium text-ink">Live sign-in code</p>
+                <p className="mt-1 text-xs text-slate">
+                  Save this product, then go to <strong>Code Accounts</strong> in the admin menu to
+                  attach one or more accounts to it. Buyers are queued one at a time per account, and
+                  each code goes to exactly one buyer. No Gmail settings are needed here.
+                </p>
               </div>
             ) : form.deliveryType === "MANUAL" ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
