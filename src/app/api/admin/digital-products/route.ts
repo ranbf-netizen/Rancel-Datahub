@@ -153,6 +153,7 @@ gmailRevealSeconds,
       if (
         type !== "REVEAL" &&
         type !== "GMAIL_LATEST" &&
+        type !== "INBOUND_CODE" &&
         type !== "MANUAL" &&
         !fileUrl
       ) {
