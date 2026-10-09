@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { LayoutDashboard, BarChart3, Package, Ticket, ShoppingBag, ShoppingCart, ClipboardList, Users, Banknote, Sprout, Megaphone, Rocket, Smartphone, MessageSquare } from "lucide-react";
+import { LayoutDashboard, BarChart3, Package, Ticket, ShoppingBag, ShoppingCart, ClipboardList, Users, Banknote, Sprout, Megaphone, Rocket, Smartphone, MessageSquare, KeyRound } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = getSession();
@@ -17,6 +17,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Link href="/admin/bundles" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Package size={16} /> Data Bundles</Link>
         {/*<Link href="/admin/pins" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Ticket size={16} /> Results PINs</Link>*/}
         <Link href="/admin/digital-products" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><ShoppingBag size={16} /> Shop Products</Link>
+        <Link href="/admin/code-accounts" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><KeyRound size={16} /> Code Accounts</Link>
         <Link href="/admin/boosting" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Rocket size={16} /> Boosting</Link>
         <Link href="/admin/sms-numbers" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><Smartphone size={16} /> SMS Numbers</Link>
         <Link href="/admin/orders" className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 hover:bg-mist"><ShoppingCart size={16} /> Orders</Link>

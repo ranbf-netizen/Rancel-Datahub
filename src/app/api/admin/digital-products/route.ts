@@ -14,6 +14,7 @@ const DELIVERY_TYPES = [
   "LINK",
   "REVEAL",
   "GMAIL_LATEST",
+  "INBOUND_CODE",
   "MANUAL",
 ];
 
