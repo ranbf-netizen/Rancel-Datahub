@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X, Megaphone, ArrowRight } from "lucide-react";
 
+
 type Announcement = { id: string; title: string; body: string };
 
 export default function UpdatePopup() {
@@ -75,7 +76,17 @@ export default function UpdatePopup() {
           <h2 className="mt-1 text-xl font-bold text-ink">{latest.title}</h2>
           <p className="mt-2 text-sm leading-relaxed text-ink/70">{latest.body}</p>
 
-          <div className="mt-6 flex gap-3">
+                    <a
+            href="https://whatsapp.com/channel/0029Vb9D7Oa17EmzAbEvPn0O"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={close}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-sm font-semibold text-white transition hover:bg-[#25D366]/90"
+          >
+            <Megaphone size={16} /> Join our WhatsApp Channel
+          </a>
+
+          <div className="mt-3 flex gap-3">
             <Link
               href="/updates"
               onClick={close}

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import FloatingJoinButton from "../components/FloatingJoinButton";
+
 
 type Profile = {
   id: string;
@@ -123,7 +125,6 @@ export default function AgentDashboard() {
       {panel === "prices" && <PriceListPanel bundles={bundles} discountPercent={profile!.discountPercent} />}
               {panel === "topup" && <TopUpPanel />}
       {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
-      {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
       {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
       {panel === "store" && <StorePanel />}
       {panel === "api" && <ApiKeyPanel />}
@@ -236,7 +237,15 @@ export default function AgentDashboard() {
         ))}
         {transactions.length === 0 && <p className="text-sm text-slate">No transactions yet.</p>}
       </div>
-      <Pager page={txPage} totalPages={Math.max(1, Math.ceil(transactions.length / PER_PAGE))} onChange={setTxPage} count={transactions.length} />
+            <Pager page={txPage} totalPages={Math.max(1, Math.ceil(transactions.length / PER_PAGE))} onChange={setTxPage} count={transactions.length} />
+
+                  <FloatingJoinButton
+        href="https://chat.whatsapp.com/G1CXfZyi9UuDg5cZ1brdSX"
+        label="Join Agent Community"
+        icon="community"
+        color="blue"
+        position="bottom-4 left-4"
+      />
     </div>
   );
 }

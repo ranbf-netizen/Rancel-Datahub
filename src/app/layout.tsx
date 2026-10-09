@@ -11,6 +11,7 @@ import AnnouncementBanner from "./components/AnnouncementBanner";
 import ChromeGate, { StorefrontBar } from "./components/ChromeGate";
 import VisitTracker from "./components/VisitTracker";
 import { LogIn, UserRoundPlus } from "lucide-react";
+import FloatingJoinButton from "./components/FloatingJoinButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -99,8 +100,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main>{children}</main>
         <Suspense fallback={null}>
         <ChromeGate>
-        <Footer />
+                <Footer />
         <WhatsAppButton />
+                <FloatingJoinButton
+          href="https://whatsapp.com/channel/0029Vb9D7Oa17EmzAbEvPn0O"
+          label="Join our Channel"
+          icon="channel"
+          color="green"
+          position="bottom-4 left-4"
+          hideOn={["/agent"]}       
+        />
         </ChromeGate>
         </Suspense>
       </body>
