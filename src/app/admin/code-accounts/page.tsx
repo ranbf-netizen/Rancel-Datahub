@@ -95,12 +95,31 @@ export default function CodeAccountsPage() {
 
   async function remove(acc: Account) {
     if (!confirm(`Delete "${acc.label}"? This can't be undone.`)) return;
-    const res = await fetch("/api/admin/code-accounts", {
+
+    let res = await fetch("/api/admin/code-accounts", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: acc.id }),
     });
-    const data = await res.json();
+    let data = await res.json();
+
+    // Blocked because buyers are in the queue: offer to force-clear.
+    if (res.status === 409 && data?.canForce) {
+      const ok = confirm(
+        `${data.liveCount} buyer(s) are still in this account's queue.\n\n` +
+          `If these are leftover or test sessions, you can force delete — this clears the queue and removes the account.\n\n` +
+          `Only do this if no real customer is currently waiting. Force delete now?`
+      );
+      if (!ok) return;
+
+      res = await fetch("/api/admin/code-accounts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: acc.id, force: true }),
+      });
+      data = await res.json();
+    }
+
     if (!res.ok) alert(data?.error || "Could not delete.");
     load();
   }

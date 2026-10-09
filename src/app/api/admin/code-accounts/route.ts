@@ -99,15 +99,25 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!admin()) return NextResponse.json({ error: "Admin only." }, { status: 403 });
 
-  const { id } = await req.json();
+  const { id, force } = await req.json();
   if (!id) return NextResponse.json({ error: "Account ID is required." }, { status: 400 });
 
-  // Block deletion if buyers are currently queued, to avoid stranding them.
+  // Block deletion if buyers are currently queued, to avoid stranding them,
+  // UNLESS force is set (used to clear leftover / test sessions).
   const live = await prisma.codeSession.count({ where: { accountId: id, status: { in: ["WAITING", "ACTIVE"] } } });
-  if (live > 0) {
-    return NextResponse.json({ error: `${live} buyer(s) are currently in this account's queue. Pause it instead, or wait until it's clear.` }, { status: 409 });
+  if (live > 0 && !force) {
+    return NextResponse.json(
+      { error: `${live} buyer(s) are currently in this account's queue.`, liveCount: live, canForce: true },
+      { status: 409 }
+    );
   }
 
-  await prisma.codeAccount.delete({ where: { id } });
+  // Remove child rows first (sessions + received emails) so the delete succeeds,
+  // then the account itself — all in one transaction so it can't half-finish.
+  await prisma.$transaction([
+    prisma.codeSession.deleteMany({ where: { accountId: id } }),
+    prisma.inboundEmail.deleteMany({ where: { accountId: id } }),
+    prisma.codeAccount.delete({ where: { id } }),
+  ]);
   return NextResponse.json({ ok: true });
 }
