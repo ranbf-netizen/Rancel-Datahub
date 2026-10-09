@@ -1,0 +1,174 @@
+diff --git a/src/app/api/digital-products/download/route.ts b/src/app/api/digital-products/download/route.ts
+index 2662354..ea6e014 100644
+--- a/src/app/api/digital-products/download/route.ts
++++ b/src/app/api/digital-products/download/route.ts
+@@ -101,6 +101,7 @@ async function handleInboundCodeDelivery(purchase: any, retry: boolean) {
+     secondsRemaining: view.secondsRemaining,
+     totalSeconds: view.totalSeconds,
+     turnSecondsLeft: view.turnSecondsLeft,
++    canRejoin: view.canRejoin,
+     attemptsRemaining:
+       typeof view.attempts === "number" && typeof view.maxAttempts === "number"
+         ? view.maxAttempts - view.attempts
+diff --git a/src/app/downloads/page.tsx b/src/app/downloads/page.tsx
+index fede360..f685579 100644
+--- a/src/app/downloads/page.tsx
++++ b/src/app/downloads/page.tsx
+@@ -81,6 +81,7 @@ function DownloadInner() {
+     attemptsRemaining?: number;
+     positionInQueue?: number;
+     turnSecondsLeft?: number;
++    canRejoin?: boolean;
+     phase?: string;
+   } | null>(null);
+ 
+@@ -195,7 +196,18 @@ function DownloadInner() {
+   useEffect(() => {
+     if (secondsLeft === null) return;
+     if (secondsLeft <= 0) {
+-      setItem((prev) => (prev ? { ...prev, revealContent: null, revealInstruction: null, phase: "expired" } : prev));
++      setItem((prev) =>
++        prev
++          ? {
++              ...prev,
++              revealContent: null,
++              revealInstruction: null,
++              // Inbound-code is one-and-done once shown; Gmail flow keeps its old behaviour.
++              phase: prev.deliveryType === "INBOUND_CODE" ? "expired_used" : "expired",
++              canRejoin: prev.deliveryType === "INBOUND_CODE" ? false : prev.canRejoin,
++            }
++          : prev
++      );
+       return;
+     }
+     const timer = setTimeout(() => setSecondsLeft((current) => (current !== null ? Math.max(0, current - 1) : current)), 1000);
+@@ -305,7 +317,7 @@ function DownloadInner() {
+                 </div>
+               )}
+ 
+-              {/* TURN EXPIRED - retry or final */}
++              {/* TURN EXPIRED, NO CODE EVER ARRIVED - rejoin allowed */}
+               {item.phase === "expired" && (
+                 <div className="rounded-2xl border border-ghRed/20 bg-ghRed/5 p-5">
+                   <div className="flex items-start gap-3">
+@@ -315,24 +327,40 @@ function DownloadInner() {
+                       <p className="mt-2 text-sm leading-relaxed text-slate">
+                         Your turn ended before a code came through. You can rejoin the queue and try again.
+                       </p>
+-                      {typeof item.attemptsRemaining === "number" && (
++                      {item.canRejoin === false && (
+                         <p className="mt-2 text-xs leading-relaxed text-slate">
+-                          {item.attemptsRemaining > 0
+-                            ? `${item.attemptsRemaining} attempt${item.attemptsRemaining === 1 ? "" : "s"} remaining.`
+-                            : "No attempts remaining — this order has been flagged for review. Please contact support with your payment reference."}
++                          No attempts remaining — this order has been flagged for review. Please contact support with your payment reference.
+                         </p>
+                       )}
+                     </div>
+                   </div>
+-                  {(item.attemptsRemaining === undefined || item.attemptsRemaining > 0) && (
++                  {item.canRejoin !== false && (
+                     <button onClick={retryCheck} disabled={checkingCode} className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 disabled:opacity-50">
+                       {checkingCode ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+-                      {checkingCode ? "Rejoining…" : "Rejoin the queue"}
++                      {checkingCode ? "Rejoining…" : "Request a new code"}
+                     </button>
+                   )}
+                 </div>
+               )}
+ 
++              {/* CODE WAS SHOWN, TIMER RAN OUT - final, no rejoin */}
++              {item.phase === "expired_used" && (
++                <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
++                  <div className="flex items-start gap-3">
++                    <Clock size={20} className="mt-0.5 shrink-0 text-slate" />
++                    <div>
++                      <p className="text-sm font-bold text-ink">Code expired</p>
++                      <p className="mt-2 text-sm leading-relaxed text-slate">
++                        Your sign-in code was shown and has now expired. For security, each purchase shows the code once only.
++                      </p>
++                      <p className="mt-2 text-xs leading-relaxed text-slate">
++                        If you missed it, the code may still work for a short while — try entering it on the sign-in screen. If it no longer works, please contact support with your payment reference.
++                      </p>
++                    </div>
++                  </div>
++                </div>
++              )}
++
+               {/* NO ACCOUNT CONFIGURED */}
+               {item.phase === "no_account" && (
+                 <div className="rounded-2xl border border-ink/10 bg-mist/60 p-5">
+diff --git a/src/lib/codeQueue.ts b/src/lib/codeQueue.ts
+index fef63bc..d8551ad 100644
+--- a/src/lib/codeQueue.ts
++++ b/src/lib/codeQueue.ts
+@@ -15,7 +15,9 @@ import { prisma } from "@/lib/db";
+ import { extractCode, instructionFor } from "@/lib/codeExtract";
+ 
+ export type SessionView = {
+-  phase: "waiting_turn" | "active" | "revealed" | "expired" | "no_account";
++  // "expired"      = turn ended with NO code shown → buyer may rejoin
++  // "expired_used" = a code was shown and its timer ran out → final, no rejoin
++  phase: "waiting_turn" | "active" | "revealed" | "expired" | "expired_used" | "no_account";
+   positionInQueue?: number;
+   loginEmail?: string;
+   revealInstruction?: string;
+@@ -25,6 +27,7 @@ export type SessionView = {
+   turnSecondsLeft?: number;
+   attempts?: number;
+   maxAttempts?: number;
++  canRejoin?: boolean;
+ };
+ 
+ const MAX_ATTEMPTS = 3;
+@@ -166,10 +169,23 @@ export async function getSessionView(purchaseId: string): Promise<SessionView> {
+         totalSeconds: account.revealSeconds,
+       };
+     }
+-    return { phase: "expired" };
++    // A code WAS shown and its display time ran out → final, no rejoin.
++    // Flip the row to EXPIRED but keep revealedCode set, so this stays final.
++    if (session.status === "REVEALED") {
++      await prisma.codeSession.updateMany({
++        where: { id: session.id, status: "REVEALED" },
++        data: { status: "EXPIRED" },
++      });
++    }
++    return { phase: "expired_used", canRejoin: false };
+   }
+ 
+-  if (session.status === "EXPIRED") return { phase: "expired" };
++  // Expired session: whether they can rejoin depends on if a code was ever shown.
++  if (session.status === "EXPIRED") {
++    if (session.revealedCode) return { phase: "expired_used", canRejoin: false };
++    const usedUp = session.attempts + 1 >= MAX_ATTEMPTS;
++    return { phase: "expired", canRejoin: !usedUp };
++  }
+ 
+   // Move the queue forward before deciding what to show.
+   await advanceQueue(session.accountId, account.turnSeconds);
+@@ -197,7 +213,11 @@ export async function getSessionView(purchaseId: string): Promise<SessionView> {
+   }
+ 
+   if (fresh.status === "REVEALED") return getSessionView(purchaseId);
+-  if (fresh.status === "EXPIRED") return { phase: "expired" };
++  if (fresh.status === "EXPIRED") {
++    if (fresh.revealedCode) return { phase: "expired_used", canRejoin: false };
++    const usedUp = fresh.attempts + 1 >= MAX_ATTEMPTS;
++    return { phase: "expired", canRejoin: !usedUp };
++  }
+ 
+   // Still WAITING: compute position in the queue.
+   const ahead = await prisma.codeSession.count({
+@@ -218,6 +238,11 @@ export async function requeue(purchaseId: string): Promise<SessionView> {
+   const session = await prisma.codeSession.findUnique({ where: { purchaseId }, include: { account: true } });
+   if (!session) return { phase: "no_account" };
+ 
++  // A code was already shown for this purchase → final, no rejoin, ever.
++  if (session.revealedCode) {
++    return { phase: "expired_used", canRejoin: false };
++  }
++
+   if (session.status === "EXPIRED") {
+     if (session.attempts + 1 >= MAX_ATTEMPTS) {
+       // Out of attempts: flag a refund (best-effort) and leave expired.
