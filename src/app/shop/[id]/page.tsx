@@ -151,7 +151,9 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               : <div className="flex h-full w-full items-center justify-center text-slate">No image</div>}
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">{product.platform || product.category || "Digital"}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+              {product.productType === "BOOSTING" ? (product.platform || product.category || "Digital") : (product.category || "Digital")}
+            </p>
             {product.productType === "BOOSTING" && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">Boosting</span>}
           </div>
           <h1 className="mt-1 text-3xl font-bold">{product.title}</h1>
