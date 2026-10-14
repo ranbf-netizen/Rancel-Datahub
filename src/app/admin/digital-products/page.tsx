@@ -24,6 +24,17 @@ const PLATFORMS = [
   "X",
 ];
 
+// Preset delivery-time choices shown to the buyer on the product page.
+// "Other" falls back to a free-text input, so a product that genuinely needs
+// something like "24-48 hours" or a one-off description still works.
+const DELIVERY_TIME_OPTIONS = [
+  "Instant",
+  "1-5 mins",
+  "5-10 mins",
+  "30 mins - 1 hour",
+  "24-48 hours",
+];
+
 const EMPTY = {
   title: "",
   description: "",
@@ -63,6 +74,11 @@ export default function AdminDigitalProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productsPage, setProductsPage] = useState(1);
   const [form, setForm] = useState({ ...EMPTY });
+  // Tracks whether "Other" was explicitly chosen for delivery time, separate
+  // from the text itself - needed because clearing the text to "" to let the
+  // admin type a custom value is otherwise indistinguishable from "nothing
+  // chosen yet".
+  const [deliveryOther, setDeliveryOther] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Load a product's values into the form for editing.
@@ -94,12 +110,14 @@ export default function AdminDigitalProducts() {
       featured: p.featured ? "1" : "",
       instantDelivery: p.instantDelivery ? "1" : "",
     });
+    setDeliveryOther(!!p.deliveryEstimate && !DELIVERY_TIME_OPTIONS.includes(p.deliveryEstimate));
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function cancelEdit() {
     setEditingId(null);
     setForm({ ...EMPTY });
+    setDeliveryOther(false);
     setError("");
   }
   const [adding, setAdding] = useState(false);
@@ -218,6 +236,7 @@ export default function AdminDigitalProducts() {
 
     setEditingId(null);
     setForm({ ...EMPTY });
+    setDeliveryOther(false);
     load();
   }
 
@@ -448,6 +467,36 @@ export default function AdminDigitalProducts() {
           onChange={(e) => set("stock", e.target.value)}
         />
 
+        <div>
+          <select
+            className="field"
+            value={DELIVERY_TIME_OPTIONS.includes(form.deliveryEstimate) ? form.deliveryEstimate : (deliveryOther ? "Other" : "")}
+            onChange={(e) => {
+              if (e.target.value === "Other") {
+                setDeliveryOther(true);
+                set("deliveryEstimate", "");
+                return;
+              }
+              setDeliveryOther(false);
+              set("deliveryEstimate", e.target.value);
+            }}
+          >
+            <option value="">Delivery time (shown to buyer)…</option>
+            {DELIVERY_TIME_OPTIONS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+            <option value="Other">Other (type your own)</option>
+          </select>
+          {deliveryOther && (
+            <input
+              className="field mt-2"
+              placeholder="Custom delivery time (e.g. 2-4 hours)"
+              value={form.deliveryEstimate}
+              onChange={(e) => set("deliveryEstimate", e.target.value)}
+            />
+          )}
+        </div>
+
         {isBoosting ? (
           <>
             <div className="grid grid-cols-2 gap-3">
@@ -472,15 +521,6 @@ export default function AdminDigitalProducts() {
                 }
               />
             </div>
-
-            <input
-              className="field"
-              placeholder="Delivery estimate (e.g. 24-48 hours)"
-              value={form.deliveryEstimate}
-              onChange={(e) =>
-                set("deliveryEstimate", e.target.value)
-              }
-            />
 
             <textarea
               className="field"
