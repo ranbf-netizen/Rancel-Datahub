@@ -9,6 +9,7 @@ import {
   Zap,
   Star,
   ArrowRight,
+  Clock,
 } from "lucide-react";
 import BoostingGraphic from "../components/BoostingGraphic";
 import SmsNumbersGraphic from "../components/SmsNumbersGraphic";
@@ -36,6 +37,7 @@ type Product = {
   quantity?: string;
   featured?: boolean;
   instantDelivery?: boolean;
+  deliveryEstimate?: string;
 };
 
 export default function ShopPage() {
@@ -185,6 +187,13 @@ export default function ShopPage() {
           <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary">
             <Zap size={12} />
             Instant delivery
+          </p>
+        )}
+
+        {p.deliveryEstimate && p.deliveryEstimate !== "Instant" && (
+          <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate">
+            <Clock size={12} />
+            {p.deliveryEstimate}
           </p>
         )}
 
