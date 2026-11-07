@@ -6,6 +6,9 @@ type Withdrawal = {
   id: string;
   agentName: string;
   agentPhone: string;
+  momoPhone: string;
+  momoNetwork: string;
+  payoutDetailsCaptured: boolean;
   walletBalance: number;
   amount: number;
   status: string;
@@ -57,57 +60,131 @@ export default function AdminWithdrawals() {
       )}
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[680px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b border-ink/10 text-left text-xs uppercase text-slate">
-              <th className="py-2">Requested</th><th>Agent</th><th>Phone</th><th>Amount</th><th>Wallet</th><th>Status</th><th></th>
+              <th className="py-2">Requested</th>
+<th>Agent</th>
+<th>Account Phone</th>
+<th>Mobile Money Details</th>
+<th>Amount</th>
+<th>Earnings Balance</th>
+<th>Status</th>
+<th></th>
             </tr>
           </thead>
           <tbody>
-            {slice.map((r) => (
-              <tr key={r.id} className="border-b border-ink/5">
-                <td className="py-2 whitespace-nowrap">{new Date(r.createdAt).toLocaleString()}</td>
-                <td>{r.agentName}</td>
-                <td className="whitespace-nowrap">{r.agentPhone}</td>
-                <td className="font-semibold">GH₵ {r.amount.toFixed(2)}</td>
-                <td className="text-slate">GH₵ {r.walletBalance.toFixed(2)}</td>
-                <td>
-                  <span className={r.status === "PENDING" ? "text-amber-600" : "text-primary"}>
-                    {r.status === "PENDING" ? "Pending" : "Paid"}
-                  </span>
-                </td>
-                <td className="text-right">
-                  {r.status === "PENDING" && (
-                    <button
-                      onClick={() => markPaid(r.id)}
-                      disabled={working === r.id}
-                      className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
-                    >
-                      {working === r.id ? "Saving…" : "Mark paid"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
+  {slice.map((r) => (
+    <tr key={r.id} className="border-b border-ink/5">
+      <td className="py-2 whitespace-nowrap">
+        {new Date(r.createdAt).toLocaleString()}
+      </td>
+
+      <td>{r.agentName}</td>
+
+      <td className="whitespace-nowrap">{r.agentPhone}</td>
+
+      <td className="whitespace-nowrap">
+        <p className="font-semibold">{r.momoNetwork}</p>
+        <p>{r.momoPhone}</p>
+        {!r.payoutDetailsCaptured && (
+          <p className="text-xs text-amber-600">
+            Older request — verify payout number
+          </p>
+        )}
+      </td>
+
+      <td className="font-semibold">
+        GH₵ {r.amount.toFixed(2)}
+      </td>
+
+      <td className="text-slate">
+        GH₵ {r.walletBalance.toFixed(2)}
+      </td>
+
+      <td>
+        <span className={r.status === "PENDING" ? "text-amber-600" : "text-primary"}>
+          {r.status === "PENDING" ? "Pending" : "Paid"}
+        </span>
+      </td>
+
+      <td className="text-right">
+        {r.status === "PENDING" && (
+          <button
+            onClick={() => markPaid(r.id)}
+            disabled={working === r.id}
+            className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-50"
+          >
+            {working === r.id ? "Saving…" : "Mark paid"}
+          </button>
+        )}
+      </td>
+    </tr>
+  ))}
+</tbody>
+
         </table>
-        {loading && <p className="mt-3 text-sm text-slate">Loading…</p>}
-        {!loading && rows.length === 0 && <p className="mt-3 text-sm text-slate">No withdrawal requests yet.</p>}
-        <Pager page={page} totalPages={totalPages} onChange={setPage} count={rows.length} />
+
+        {loading && (
+          <p className="mt-3 text-sm text-slate">Loading…</p>
+        )}
+
+        {!loading && rows.length === 0 && (
+          <p className="mt-3 text-sm text-slate">
+            No withdrawal requests yet.
+          </p>
+        )}
+
+        <Pager
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+          count={rows.length}
+        />
       </div>
     </div>
   );
 }
 
-function Pager({ page, totalPages, onChange, count }: { page: number; totalPages: number; onChange: (p: number) => void; count: number }) {
+function Pager({
+  page,
+  totalPages,
+  onChange,
+  count,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+  count: number;
+}) {
   if (count === 0) return null;
+
   return (
     <div className="mt-3 flex items-center justify-between text-sm">
-      <span className="text-slate">{count} request{count === 1 ? "" : "s"}</span>
+      <span className="text-slate">
+        {count} request{count === 1 ? "" : "s"}
+      </span>
+
       <div className="flex items-center gap-3">
-        <span className="text-slate">Page {page} of {totalPages}</span>
-        <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Prev</button>
-        <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40">Next</button>
+        <span className="text-slate">
+          Page {page} of {totalPages}
+        </span>
+
+        <button
+          onClick={() => onChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40"
+        >
+          Prev
+        </button>
+
+        <button
+          onClick={() => onChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="rounded-md border border-ink/15 px-3 py-1 text-xs font-medium hover:bg-mist disabled:opacity-40"
+        >
+          Next
+        </button>
       </div>
     </div>
   );

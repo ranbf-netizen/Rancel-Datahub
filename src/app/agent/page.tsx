@@ -18,7 +18,7 @@ type Sale = { id: string; bundleId: string; beneficiaryNumber: string; resellerC
 type StoreOrder = { id: string; dataSizeGb: number; network: string; beneficiaryNumber: string; amount: number; commission: number; paymentStatus: string; fulfillmentStatus: string; createdAt: string };
 type AfaOffer = { id: string; fullName: string; phoneNumber: string; town: string; occupation: string; amount: number; paymentStatus: string; supplierStatus: string | null; createdAt: string };
 
-type ActivePanel = "prices" | "topup" | "withdraw" | "afa" | "store" | "api" | null;
+type ActivePanel = "prices" | "topup" | "withdraw" | "payout" | "afa" | "store" | "api" | null;
 
 const PER_PAGE = 10;
 
@@ -118,6 +118,7 @@ export default function AgentDashboard() {
         <button onClick={() => setPanel(panel === "prices" ? null : "prices")} className="btn-primary shrink-0 whitespace-nowrap">Price List</button>
         <button onClick={() => setPanel(panel === "afa" ? null : "afa")} className="btn-secondary shrink-0 whitespace-nowrap">Create AFA Offer</button>
         <button onClick={() => setPanel(panel === "withdraw" ? null : "withdraw")} className="btn-secondary shrink-0 whitespace-nowrap">Withdraw</button>
+        <button onClick={() => setPanel(panel === "payout" ? null : "payout")} className="btn-secondary shrink-0 whitespace-nowrap">Payout Settings</button>
         <button onClick={() => setPanel(panel === "store" ? null : "store")} className="btn-secondary shrink-0 whitespace-nowrap">My Store</button>
         <button onClick={() => setPanel(panel === "api" ? null : "api")} className="btn-secondary shrink-0 whitespace-nowrap">API Access</button>
       </div>
@@ -125,6 +126,7 @@ export default function AgentDashboard() {
       {panel === "prices" && <PriceListPanel bundles={bundles} discountPercent={profile!.discountPercent} />}
               {panel === "topup" && <TopUpPanel />}
       {panel === "withdraw" && <WithdrawPanel balance={profile!.earningsBalance ?? 0} onDone={() => { setPanel(null); load(); }} />}
+        {panel === "payout" && <PayoutSettingsPanel />}
       {panel === "afa" && <AfaPanel price={afaPrice} onDone={() => { setPanel(null); load(); }} />}
       {panel === "store" && <StorePanel />}
       {panel === "api" && <ApiKeyPanel />}
@@ -315,6 +317,7 @@ function PriceListPanel({ bundles, discountPercent }: { bundles: Bundle[]; disco
   );
 }
 
+
 function WithdrawPanel({ balance, onDone }: { balance: number; onDone: () => void }) {
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
@@ -323,17 +326,63 @@ function WithdrawPanel({ balance, onDone }: { balance: number; onDone: () => voi
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    const numericAmount = Number(amount);
+
+    if (!Number.isFinite(numericAmount) || numericAmount < 10) {
+      setError("Minimum withdrawal amount is GH₵10.");
+      return;
+    }
+
+    if (numericAmount > balance) {
+      setError("Insufficient balance. Please enter an amount within your available balance.");
+      return;
+    }
+
     setLoading(true);
-    const res = await fetch("/api/agents/withdraw", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setError(data.error || "Withdrawal failed."); return; }
-    onDone();
+
+    try {
+      // Confirm that payout details have been saved.
+      const settingsRes = await fetch("/api/agents/payout-settings");
+      const settings = await settingsRes.json();
+
+      if (!settingsRes.ok) {
+        setError(settings.error || "Unable to verify your payout details.");
+        return;
+      }
+
+      if (!settings.momoPhone || !settings.momoNetwork) {
+        setError("Please set up your Mobile Money payout details before requesting a withdrawal.");
+        return;
+      }
+
+      // Submit withdrawal request.
+      const res = await fetch("/api/agents/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: numericAmount }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Withdrawal request failed. Please try again.");
+        return;
+      }
+
+      setAmount("");
+      onDone();
+    } catch {
+      setError("Something went wrong. Please check your internet connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   }
+
+
+
+
+
 
   return (
     <form onSubmit={submit} className="card mt-4 max-w-md space-y-3">
@@ -346,6 +395,150 @@ function WithdrawPanel({ balance, onDone }: { balance: number; onDone: () => voi
     </form>
   );
 }
+
+
+const PAYOUT_NETWORKS = [
+  { value: "MTN", label: "MTN Mobile Money", image: "/images/mtn-momo.jpeg" },
+  { value: "TELECEL", label: "Telecel Cash", image: "/images/telecel-cash.jpeg" },
+  { value: "AIRTELTIGO", label: "AT Money", image: "/images/at-money.jpeg" },
+];
+
+function PayoutSettingsPanel() {
+  const [phone, setPhone] = useState("");
+  const [network, setNetwork] = useState("MTN");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch("/api/agents/payout-settings");
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || "Could not load payout settings.");
+          return;
+        }
+
+        setPhone(data.momoPhone || "");
+        setNetwork(data.momoNetwork || "MTN");
+      } catch {
+        setError("Unable to load your payout details.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!/^0\d{9}$/.test(phone)) {
+      setError("Enter a valid 10-digit Ghanaian Mobile Money number.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const res = await fetch("/api/agents/payout-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, network }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Could not save payout details.");
+        return;
+      }
+
+      setPhone(data.momoPhone || phone);
+      setNetwork(data.momoNetwork || network);
+      setMessage("Your payout details have been saved successfully.");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="card mt-4 text-sm text-slate">Loading payout settings...</div>;
+  }
+
+  return (
+    <form onSubmit={save} className="card mt-4 max-w-md space-y-4">
+      <div>
+        <p className="text-sm font-semibold">Mobile Money Payout Settings</p>
+        <p className="mt-1 text-xs text-slate">
+          Set the Mobile Money account where your agent withdrawals should be paid.
+        </p>
+      </div>
+
+      <div>
+        <label className="label">Select your network</label>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {PAYOUT_NETWORKS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => setNetwork(item.value)}
+              className={`rounded-xl border p-2 text-center text-xs ${
+                network === item.value
+                  ? "border-primary bg-primary/5"
+                  : "border-ink/10"
+              }`}
+            >
+              <img
+                src={item.image}
+                alt={item.label}
+                className="mx-auto mb-2 h-10 w-10 rounded-lg object-contain"
+              />
+              <span className="font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="label">Mobile Money number</label>
+        <input
+          type="tel"
+          inputMode="numeric"
+          maxLength={10}
+          placeholder="024XXXXXXX"
+          value={phone}
+          onChange={(e) =>
+            setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+          }
+          className="field"
+          required
+        />
+      </div>
+
+      {error && <p className="text-sm text-ghRed">{error}</p>}
+      {message && <p className="text-sm text-primary">{message}</p>}
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="btn-primary w-full"
+      >
+        {saving ? "Saving..." : "Save Payout Details"}
+      </button>
+    </form>
+  );
+}
+
+
 
 function AfaPanel({ price, onDone }: { price: number; onDone: () => void }) {
   const [form, setForm] = useState({

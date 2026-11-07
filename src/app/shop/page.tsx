@@ -241,28 +241,30 @@ export default function ShopPage() {
           </div>
         </Link>
 
-        <Link
-          href="/shop/sms-numbers"
-          className="card hover-lift flex flex-col overflow-hidden !p-0"
-        >
-          <div className="aspect-square w-full overflow-hidden">
-            <SmsNumbersGraphic />
-          </div>
+        {/*
+<Link
+  href="/shop/sms-numbers"
+  className="card hover-lift flex flex-col overflow-hidden !p-0"
+>
+  <div className="aspect-square w-full overflow-hidden">
+    <SmsNumbersGraphic />
+  </div>
 
-          <div className="p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
-              SMS Numbers
-            </p>
+  <div className="p-3">
+    <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+      SMS Numbers
+    </p>
 
-            <p className="mt-0.5 text-sm font-semibold leading-snug text-ink">
-              Rent a verification number
-            </p>
+    <p className="mt-0.5 text-sm font-semibold leading-snug text-ink">
+      Rent a verification number
+    </p>
 
-            <p className="mt-0.5 text-xs text-slate">
-              Tap to browse →
-            </p>
-          </div>
-        </Link>
+    <p className="mt-0.5 text-xs text-slate">
+      Tap to browse →
+    </p>
+  </div>
+</Link>
+*/}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
